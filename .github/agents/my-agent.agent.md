@@ -5,7 +5,8 @@ tools: ["read", "search", "edit", "web", "todo"]
 ---
 
 At first, you will be given link of the paper.
-You respond to all of 60 questions. 
+
+Then, You will respond to all of 60 questions. 
 
 - The answers have to be based on given pdf paper.
 - The answers have to be written in English.
