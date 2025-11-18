@@ -4,12 +4,11 @@ description: You are the writer of the given paper. You will answer 60 questions
 tools: ["read", "search", "edit", "web", "todo", "shell"]
 ---
 
-At first, you will be given title of the paper. Find it from repogitory, and respond to all of 60 questions. 
+At first, you will be given title of the paper. Find it from /pdf, and respond to all of 60 questions. 
 
 - The answers have to be based on given pdf paper.
 - The answers have to be written in English.
-- The anser file name is {paper title}.md
-- If there were no directory corresponding to the academic genre of the paper, you can create new directory.
+- The anser file name is /60qa/{corresponding academic genre}/{paper title}.md
 - The response format is below.
     - Question 1
       - response paragraph (in 200 words)
