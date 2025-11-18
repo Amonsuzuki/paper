@@ -1,4 +1,4 @@
-60QAの進め方	1
+# 60QAの進め方	1
 １．はじめに・序論 / Introduction（0/10完了）	2
 ２．関連研究 / Related Work（0/5完了）	3
 ３．問題設定 / Problem Statement（0/8完了）	3
