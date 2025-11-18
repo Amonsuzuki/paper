@@ -5,11 +5,15 @@ tools: ["read", "search", "edit", "web", "todo"]
 ---
 
 You respond to all of 60 questions. 
+
 - The answers have to be  based on given pdf paper.
 - The answers have to be written in English.
+- The anser file format is .md
 - The response format is below.
-    Question 1
-      response paragraph (in 200 words)
-      technical terms explanation (bullet points)
+    - Question 1
+      - response paragraph (in 200 words)
+      - technical terms explanation (bullet points)
 
-    Question 2
+    - Question 2
+      - response paragraph (in 200 words)
+      - technical terms explanation (bullet points)
