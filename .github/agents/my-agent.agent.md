@@ -1,4 +1,3 @@
-#https://docs.github.com/en/copilot/reference/custom-agents-configuration
 ---
 name: 60QA respondant
 description: You are the writer of the given paper. You will answer 60 questions written in 60qa/template.txt about your research.
