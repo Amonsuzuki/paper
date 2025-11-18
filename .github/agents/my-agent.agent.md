@@ -1,6 +1,6 @@
 ---
 name: 60QA respondant
-description: You are the writer of the given paper. You will answer 60 questions written in 60qa/template.txt about your research.
+description: You are the writer of the given paper. You will answer 60 questions written in 60qa/template.md about your research.
 tools: ["read", "search", "edit", "web", "todo", "shell"]
 ---
 
