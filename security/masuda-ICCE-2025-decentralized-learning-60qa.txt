@@ -95,6 +95,8 @@ Byzantine攻撃の検出と防御は、攻撃者が正常なノードと同じ�
 ○XXX分野のサーベイ論文を複数挙げよ。 / Explain about multiple survey papers in the related area.
 Byzantine耐性を持つ分散機械学習に関するサーベイとして、Kairouz et al. [13]によるFederated Learningの包括的なサーベイがある。また、Blanchard et al.による分散最適化におけるByzantine耐性に関する研究レビューや、Li et al.による分散学習のロバスト性に関する調査論文がある。これらのサーベイは、中央集権型および分散型の両方のアプローチにおけるByzantine攻撃と防御手法を体系的に整理している。
 
+【用語説明】サーベイ論文（survey paper）とは、特定の研究分野における既存研究を包括的にレビューし、体系的に整理した論文を指す。分散最適化（distributed optimization）とは、複数のノードが協調して最適化問題を解く計算手法であり、分散学習の理論的基盤となる。
+
 ○論文を複数挙げて、１個目の関連分野を説明せよ。 / Explain the first related subfield and several related papers.
 Distance-based（距離ベース）のフィルタリング手法として、Krum [10]がある。これは、隣接ノードのモデルパラメータ間のユークリッド距離を測定し、他のノードへの距離が最小となるモデルを選択して集約に使用する手法である。しかし、この手法は高度な攻撃やByzantineノードの割合が増加すると効果がなくなる。
 
@@ -271,6 +273,8 @@ Byzantineノード比率0.3、Max Attackの条件下での100エポック後の�
 ○定性的結果：提案手法が成功した例（N個）を示せ。Ground Truth、ベースライン手法、提案手法による予測結果をそれぞれ示せ。 / Qualitative results: Show examples (N) of successful cases of the proposed method. Show the Ground Truth, predictions by the baseline method, and predictions by the proposed method respectively.
 成功例として、Byzantineノード比率0.3の環境下で学習したモデルの予測結果を3例示す。例1：Ground Truth: airplane、D_Krum: ship（誤）、D_Zeno: bird（誤）、提案手法: airplane（正）。この例では、Byzantine攻撃により既存手法が誤った特徴を学習したが、提案手法は正常なモデルを選択的に集約することで正しい予測を実現した。例2：Ground Truth: automobile、D_Krum: truck（誤）、D_Zeno: automobile（正）、提案手法: automobile（正）。例3：Ground Truth: cat、D_Krum: cat（正）、D_Zeno: dog（誤）、提案手法: cat（正）。これらの例から、提案手法が既存手法より一貫して高い精度を示すことが確認される。
 
+【用語説明】Ground Truth（正解データ）とは、実験やテストで用いられる真の正解ラベルまたは値を指す。定性的結果（qualitative results）とは、数値ではなく、具体的な例や観察を通じてモデルの性能や特性を示す結果を指す。
+
 ○定性的結果：提案手法が失敗した例（M個、N>M）を示せ。なぜ失敗したのか？ / Qualitative results: Show M examples of failure cases of the proposed method (where N>M). Why did they fail?
 失敗例として2例を示す。例1：Ground Truth: dog、提案手法: cat（誤）。この画像は、犬が猫に類似した姿勢で写っており、Byzantine攻撃の有無に関わらず分類が困難である。失敗の原因は、学習データ自体の曖昧性と、モデルの表現能力の限界である。例2：Ground Truth: bird、提案手法: airplane（誤）。この画像は、鳥が飛行中で背景が空であり、形状的に飛行機と類似している。Byzantineノード比率が高い環境では、一部の正常なノードも誤った特徴を学習する可能性があり、提案手法のフィルタリングでも完全には防げない。これらの失敗は、データの本質的な難しさに起因するものであり、Byzantine攻撃に特化した問題ではない。
 
@@ -290,8 +294,12 @@ Byzantineノード比率0.3、Max Attackの条件下での100エポック後の�
 ○失敗例を人手でカテゴリに分類せよ。各カテゴリの定義を示せ。 / Classify the failure cases into categories manually. Show the definitions of each category.
 失敗例を以下の3つのカテゴリに分類した。カテゴリA（視覚的類似性）：Ground Truthと予測クラスが視覚的に類似しており、人間でも判別が困難な例（例：cat vs dog、bird vs airplane）。全失敗例の約45%がこのカテゴリに該当する。カテゴリB（Byzantine攻撃の影響）：Byzantine攻撃により学習された誤った特徴に起因する失敗例。全失敗例の約35%がこのカテゴリである。カテゴリC（学習不足）：学習エポック数が不十分であり、より長い訓練により改善される可能性がある失敗例。全失敗例の約20%がこのカテゴリに該当する。提案手法は、カテゴリBの失敗を大幅に削減することに成功しているが、カテゴリAとCの失敗は依然として課題として残る。
 
+【用語説明】視覚的類似性（visual similarity）とは、画像が見た目において類似していることを指し、形状、色、テクスチャなどの視覚的特徴が近いことを意味する。学習不足（underfitting）とは、モデルが訓練データのパターンを十分に学習できていない状態を指し、過学習とは対照的な現象である。
+
 ○失敗の主要な要因（main bottleneck）とpossible solutionについて説明せよ。 / Explain about the main bottleneck and the possible solution.
 主要なボトルネックは、Byzantineノード比率が0.5を超える極端な環境下では、正常なノードから受信できるモデル数が限られ、十分な多様性を確保できない点である。また、学習初期段階では、高いしきい値θにより多くのBenignモデルも除外される可能性があり、収束速度が若干低下する。Possible solutionとして、以下を提案する。(1) アダプティブなネットワークトポロジー調整：Byzantineノード検出後、信頼できるノード間の接続を動的に増強する。(2) しきい値の初期値をデータセットの特性に応じて最適化する。(3) 複数エポックの履歴情報を活用し、ノードの信頼性スコアを計算して長期的な評価を行う。(4) より高度なモデルアーキテクチャ（ResNetなど）を採用し、モデルの表現能力を向上させる。
+
+【用語説明】ボトルネック（bottleneck）とは、システム全体の性能を制限する主要な障害要因を指す。モデルの多様性（diversity）とは、集約に使用するモデル群が異なる特性を持つことであり、多様性が高いほどロバストな学習が可能となる。ネットワークトポロジー（network topology）とは、ノード間の接続構造を指し、どのノードがどのノードと通信するかを定義する。ResNet（Residual Network）とは、残差接続（skip connection）を持つ深層ニューラルネットワークであり、非常に深いネットワークでも効率的に学習できる。
 
 
 ７．結論 / Conclusions（2/3完了）
@@ -306,3 +314,5 @@ Byzantine耐性を持つ分散学習において、性能ベースアプロー�
 
 ○将来研究は何か？ / What is the future study?
 将来研究として、以下の3つの方向性を検討する。第一に、しきい値θの動的調整アルゴリズムをさらに洗練させ、異なるデータセットやタスクに対する適応性を向上させる。第二に、提案手法の理論的収束保証を数学的に証明し、Byzantine攻撃下での収束率を解析する。第三に、非IID（非独立同分布）データ環境や、より高度なByzantine攻撃（adaptive attacksなど）に対する提案手法の有効性を検証する。また、実機環境での大規模実験や、他の分散学習アプリケーション（自然言語処理、強化学習など）への適用も検討する。さらに、アダプティブなネットワークトポロジー調整機構を統合し、より実用的なシステムを構築することを目指す。
+
+【用語説明】理論的収束保証（theoretical convergence guarantee）とは、アルゴリズムが一定の条件下で必ず最適解に収束することを数学的に証明することを指す。収束率（convergence rate）とは、アルゴリズムが最適解に近づく速度を表す指標であり、通常はエポック数やイテレーション数との関係で表現される。Adaptive attacks（適応的攻撃）とは、防御手法の特性を学習し、それに応じて攻撃戦略を動的に変更する高度なByzantine攻撃を指す。実機環境（real-world environment）とは、シミュレーションではなく実際のネットワークやハードウェアを使用した実験環境を指す。
