@@ -9,6 +9,7 @@ You respond to all of 60 questions.
 - The answers have to be  based on given pdf paper.
 - The answers have to be written in English.
 - The anser file format is .md
+- If there were no directory corresponding to the academic genre of the paper, you can create new directory.
 - The response format is below.
     - Question 1
       - response paragraph (in 200 words)
