@@ -8,7 +8,7 @@ At first, you will be given link of the paper. Then, You will respond to all of 
 
 - The answers have to be based on given pdf paper.
 - The answers have to be written in English.
-- The anser file format is .md
+- The anser file name is {paper title}.md
 - If there were no directory corresponding to the academic genre of the paper, you can create new directory.
 - The response format is below.
     - Question 1
