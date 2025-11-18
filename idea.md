@@ -8,7 +8,7 @@
 
 ---
 
-## move scrapbox to this repository `[COPILOT: NO ACTION]`
+## 1. move scrapbox to this repository `[COPILOT: NO ACTION]`
 ### how to create links between files
 - md file is possible?
 - how to visualize it?
@@ -19,13 +19,13 @@
 
 ---
 
-## my-research `[COPILOT: NO ACTION]`
+## 2. my-research `[COPILOT: NO ACTION]`
 
 Personal research tracking area.
 
 ---
 
-## paper impact scoring `[COPILOT: NO ACTION]`
+## 3. paper impact scoring `[COPILOT: NO ACTION]`
 
 **Scoring Range:** 0.0 to 5.0
 
@@ -37,7 +37,7 @@ Personal research tracking area.
 
 ---
 
-## new research idea based on 60qa creation by Copilot `[COPILOT: HELP]`
+## 4. new research idea based on 60qa creation by Copilot `[COPILOT: HELP]`
 
 **Task:** Generate new research ideas based on the 60qa methodology
 
@@ -49,7 +49,7 @@ Personal research tracking area.
 
 ---
 
-## chat with copilot `[COPILOT: HELP]`
+## 5. chat with copilot `[COPILOT: HELP]`
 
 **Goal:** Make research discussions more engaging and productive
 
@@ -66,7 +66,7 @@ Personal research tracking area.
 
 ---
 
-## presentation scheme `[COPILOT: REVIEW]`
+## 6. presentation scheme `[COPILOT: REVIEW]`
 
 **Goal:** Create presentations that everyone can understand
 
@@ -78,13 +78,13 @@ Personal research tracking area.
 
 ---
 
-## image storing folder `[COPILOT: NO ACTION]`
+## 7. image storing folder `[COPILOT: NO ACTION]`
 
 Organizational structure for research images and figures.
 
 ---
 
-## How to screen files faster? `[COPILOT: REVIEW]`
+## 8. How to screen files faster? `[COPILOT: REVIEW]`
 
 **Current observations:**
 - local is better
@@ -103,7 +103,7 @@ Organizational structure for research images and figures.
 
 ---
 
-## How to logically think in English? `[COPILOT: HELP]`
+## 9. How to logically think in English? `[COPILOT: HELP]`
 
 **Current situation:**
 - now I'm thinking in Japanese
@@ -117,7 +117,7 @@ Organizational structure for research images and figures.
 
 ---
 
-## Questions aggregation `[COPILOT: HELP]`
+## 10. Questions aggregation `[COPILOT: HELP]`
 
 **Task:** Copilot should pick up questions I write, aggregate them in one file, and answer them
 
@@ -129,7 +129,7 @@ Organizational structure for research images and figures.
 
 ---
 
-## Research Planning `[COPILOT: REVIEW]`
+## 11. Research Planning `[COPILOT: REVIEW]`
 
 **Process:** Write in English and get reviewed by copilot
 
@@ -142,7 +142,7 @@ Organizational structure for research images and figures.
 
 ---
 
-## 60qa Paper Analysis `[COPILOT: HELP]`
+## 12. 60qa Paper Analysis `[COPILOT: HELP]`
 
 **Current papers:**
 - `/pdf/security/masuda-ICCE-2025-decentralized-learning.pdf`
@@ -162,7 +162,7 @@ Organizational structure for research images and figures.
 
 ---
 
-## Notes for Copilot Usage
+## 13. Notes for Copilot Usage
 
 ### When to use `[COPILOT: HELP]`
 Use this tag when you want Copilot to:
