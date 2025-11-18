@@ -23,3 +23,21 @@ like chatting with collegues
 for everyone to understand
 
 # image storing folder
+
+# How to screen files faster?
+local is better
+md is easier to see then txt
+tex is better to see formulas
+pdf is default paper format
+what file type can be screened faster, easy to see, and useful?
+and what is the best method to read them?
+
+# How to logically think in English?
+now I'm thinking in Japanese.
+but, writing in English is accelerating my thought, I think.
+
+# Questions
+copilot pick up questions I write, and aggregate them in one file, and answer them
+
+# Research Planning
+write in English and reviewed by copilot.
