@@ -1,13 +1,13 @@
 # 60QAの進め方	1
-１．はじめに・序論 / Introduction（0/10完了）	2
-２．関連研究 / Related Work（0/5完了）	3
-３．問題設定 / Problem Statement（0/8完了）	3
+- １．はじめに・序論 / Introduction（0/10完了）	2
+- ２．関連研究 / Related Work（0/5完了）	3
+- ３．問題設定 / Problem Statement（0/8完了）	3
 ４．手法 / Method（0/11完了）	4
 ５．実験設定 / Experimental Setup（0/11完了）	5
 ６．実験結果 / Experimental Results（0/14完了）	6
 ７．結論 / Conclusions（0/3完了）	7
 
-60QAの進め方
+# 60QAの進め方
 標準的な国際会議論文は、およそ60段落からなる。各段落を質問への回答だと考えれば、約60個の質問に答えることで論文を完成できる。
 論文全体を考えるから途方に暮れるのであって、各質問に分割すれば楽。
 質問者は、査読者（他大学や他分野の教員）と想定する。
@@ -39,8 +39,8 @@ do {１はじめに, ２関連研究, ７結論} while (完了率<100%); // 順�
 常に文で回答せよ。
 メールだったら、質問者に単語で回答することなどしないはず。
 
-１．はじめに・序論 / Introduction（0/10完了）
-▲本研究の社会的背景は何か？ / What is the social background?
+# １．はじめに・序論 / Introduction（0/10完了）
+## 1-1. ▲本研究の社会的背景は何か？ / What is the social background?
 第１文は、読者と共有できる最大公約数的事実から始めることが多い。100人いたら90人賛成するぐらいの文という意味。
 以下のようなロジックが理解されやすい。
 Aは重要である。
@@ -51,13 +51,13 @@ AのうちBにはCという問題がある。Cは難しい。
 読み手「了解」
 
 
-▲本研究のtarget task/problemは何か？ / What is the target problem of this work?
+## 1-2. ▲本研究のtarget task/problemは何か？ / What is the target problem of this work?
 
 
-▲本研究のtarget problemの具体例（ユースケース）は何か？ / Explain a typical use case.
+## 1-3. ▲本研究のtarget problemの具体例（ユースケース）は何か？ / Explain a typical use case.
 
 
-▲そのtarget problemが難しいと言う根拠は何か？既存手法が誤る例はどんなケースか？ / Why is this task challenging?
+## 1-4. ▲そのtarget problemが難しいと言う根拠は何か？既存手法が誤る例はどんなケースか？ / Why is this task challenging?
 
 
 ▲既存手法はなぜ不十分なのか？ / Why are conventional studies insufficient?
