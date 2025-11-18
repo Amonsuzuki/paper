@@ -1,0 +1,242 @@
+60QAの進め方	1
+１．はじめに・序論 / Introduction（2/10完了）	2
+２．関連研究 / Related Work（2/5完了）	3
+３．問題設定 / Problem Statement（4/8完了）	4
+４．手法 / Method（3/11完了）	5
+５．実験設定 / Experimental Setup（5/11完了）	6
+６．実験結果 / Experimental Results（3/14完了）	7
+７．結論 / Conclusions（2/3完了）	8
+
+60QAの進め方
+標準的な国際会議論文は、およそ60段落からなる。各段落を質問への回答だと考えれば、約60個の質問に答えることで論文を完成できる。
+論文全体を考えるから途方に暮れるのであって、各質問に分割すれば楽。
+質問者は、査読者（他大学や他分野の教員）と想定する。
+具体的な質問者（XX先生、等）を思い浮かべ、その人からメールが届いたと想定して回答する。
+「はじめに」からスタートすると詰まるので、以下の順で書くべし。
+do {３問題設定} while (完了率<66%); 
+do {５実験設定} while (完了率<66%); 
+do {４手法} while (完了率<50%);
+do {６実験結果} while (完了率<66%);
+do {３問題設定, ４手法, ５実験設定, ６実験結果} while (完了率<100%); // 順不同
+do {７結論} while (完了率<66%);
+do {１はじめに} while (完了率<66%); // ここで「はじめに」に着手
+do {２関連研究} while (完了率<66%);
+do {１はじめに, ２関連研究, ７結論} while (完了率<100%); // 順不同
+完了したら、TeX流し込み→論理構造の調整→短縮→赤入れ、と進む。
+順番を気にせず進むのはなぜ良くないか？
+例えば、用語定義等が誤ったまま次に進むと、大量のQAで同じ指摘が発生し、結局手戻りが発生する。
+テンプレ質問は最大公約数的な質問なので、自分の論文にそぐわないものもある。
+よって、通常１０個程度は質問をカスタマイズか削除する。
+記号の意味
+▲：未完了
+○：教員チェック済　
+回答の第1文はトピックセンテンスから始めよ。
+論文執筆はプログラミングのようなものだと思えば良い。
+適切なブロック（関数/QA）に分割して、始めから終わりまでのロジックを設計するという意味では同じ。
+60QAは、文章を書くのが苦手な人でも書ける仕組みとして作った。ただし、京大・ATR・NICTでの所属研究室のノウハウ・査読者からのコメント・先人の知恵に立脚している。
+べからず集
+単語のみや体言止めや「...であるため。」で回答を終わらせてはならない
+常に文で回答せよ。
+メールだったら、質問者に単語で回答することなどしないはず。
+
+１．はじめに・序論 / Introduction（2/10完了）
+○本研究の社会的背景は何か？ / What is the social background?
+分散深層学習において、中央集権型学習（Federated Learning）は単一障害点や拡張性の問題を抱えている。これに対して、分散学習（Decentralized Learning）はP2Pネットワークベースの手法として、これらの欠点を克服し、データプライバシーを保ちながら正確なモデルを構築できることが示されている。特に、帯域幅が限られた環境や高遅延ネットワーク環境では、分散学習がFederated Learningより高速に動作することが先行研究で実証されている。
+
+○本研究のtarget task/problemは何か？ / What is the target problem of this work?
+分散学習環境において、故障ノードや悪意のある攻撃者（Byzantine nodes）が存在する場合、これらのノードが異常なモデルを送信することでモデルの収束が妨げられる問題に取り組む。特に、既存の防御手法が高度な攻撃や Byzantine ノードの割合増加に対して失敗することが指摘されている。
+
+▲本研究のtarget problemの具体例（ユースケース）は何か？ / Explain a typical use case.
+
+
+▲そのtarget problemが難しいと言う根拠は何か？既存手法が誤る例はどんなケースか？ / Why is this task challenging?
+
+
+▲既存手法はなぜ不十分なのか？ / Why are conventional studies insufficient?
+
+
+▲本研究では何を提案し、何を解決するのか？ / What is proposed and solved in this study?
+
+
+▲提案手法は既存手法と何が違うのか？主要な違いに絞って述べよ。 / What is the difference between the proposed and conventional methods?
+
+
+▲既存手法との違う部分は、なぜ導入するべきなのか？なぜ導入するとうまくいくと予想されるのか？ / Explain why the difference should be introduced.
+
+
+▲提案手法の新規性は何か？箇条書きせよ。 / What is the novelty of the proposed method?
+
+
+▲提案手法全体の構成をeye-catch figureを用いて示せ（通常6回修正ののち確定）。 / Show the eye-catch figure.
+
+
+
+２．関連研究 / Related Work（2/5完了）
+▲XXX分野のサーベイ論文を複数挙げよ。 / Explain about multiple survey papers in the related area.
+
+
+○論文を複数挙げて、１個目の関連分野を説明せよ。 / Explain the first related subfield and several related papers.
+Distance-based（距離ベース）のフィルタリング手法として、Krum [10]がある。これは、隣接ノードのモデルパラメータ間のユークリッド距離を測定し、他のノードへの距離が最小となるモデルを選択して集約に使用する手法である。しかし、この手法は高度な攻撃やByzantineノードの割合が増加すると効果がなくなる。
+
+○論文を複数挙げて、N個目の関連分野を説明せよ。（この項目を個数分コピーしてください） / Explain the N-th related subfield and several related papers.
+Performance-based（性能ベース）の手法として、Zeno [11]などがある。これらは隣接ノードのモデルを評価する際に、損失値や精度などのメトリクスをノードのローカルデータを用いて測定し、汎化性能が悪いモデルを除外する。しかし、この手法は学習の初期段階において、ほとんどのモデルが一様に高い損失値を示すため、ByzantineノードとBenignノードを区別することが困難であり、Byzantineモデルが集約に含まれる可能性がある。また、ハイブリッド手法として、UBAR [12]が提案されており、距離ベースと性能ベースの二段階フィルタリングを採用しているが、第一段階で高度な攻撃をフィルタリングできず、第二段階でも攻撃モデルが選択されるリスクが高い。
+
+▲標準データセットについて説明せよ。 / Explain standard datasets in the related fields.
+
+
+▲提案手法と類似手法A（＋類似手法B、類似手法C）との違いは何か？ / What is the difference(s) between the proposed and related methods?
+
+
+
+３．問題設定 / Problem Statement（4/8完了）
+○対象とするタスクの名称および内容は何か？ / What is the target problem?
+Byzantine耐性を持つ分散学習（Byzantine-resilient Decentralized Learning）である。ネットワーク内の一部のノードが任意のメッセージを送信する状況下で、正常なノード（benign nodes）が協調して最適化問題を解く。
+
+○対象タスクの望ましい解・出力について説明せよ（何をもって良い解だとするのか）。 / What is the expected behavior of the system?
+正常なノードがネットワーク全体で以下の最適化問題を解くことが望ましい：min_{x∈R^d} f(x) := 1/|H| Σ_{i∈H} {f_i(x) := E_{ξ_i~D_i} F_i(x;ξ_i)}。ここで、xはモデルパラメータ、f_iはbenignノードiのローカル目的関数、F_i(x;ξ_i)は損失関数である。
+
+▲対象タスクの代表例を示せ（図を付けること）。 / Explain a typical sample with a figure.
+
+
+○このタスクで与えられる入力は何か？ / What are the inputs of the task?
+各ノードは、ローカルデータ分布D_iからサンプルξ_iを持ち、隣接ノードとモデルを交換する。入力には、ローカルデータとネットワーク構造（undirected graph G=(V,E)）が含まれる。
+
+○タスクで求められる出力は何か？ / What kind of outputs are expected for the task?
+各ノードは、ローカル更新、モデル交換、集約の3つのステップを繰り返し、最終的にグローバルな最適モデルパラメータxを求める。
+
+▲使用する用語を定義せよ。 / Define the terms used in the paper.
+
+
+▲本研究では何を扱わないか（＝何を前提にしているか）？ / What is the assumption in the paper?
+
+
+▲タスクの評価尺度は何か？ / Which metric is used?
+
+
+
+４．手法 / Method（3/11完了）
+▲本研究は何の手法を拡張した何を提案するものか？ / Which method do you extend?
+
+
+▲提案手法で行った拡張は、上記の既存手法以外にも広く適用可能であることを説明せよ（＝他の既存手法に適用できないのであれば一般性がない拡張である）。 / Explain that the extensions made in the proposed method are widely applicable to other methods (i.e., if the extension cannot be applied to other methods, it would not be a generalized method).
+
+
+▲提案手法と既存手法の違いを箇条書きせよ。 / List the differences between the proposed method and the conventional methods.
+
+
+▲提案手法は何個の主要モジュールを有するか？各主要モジュールの名称を示せ。 / How many main modules does the proposed model have? Explain each method briefly.
+
+
+▲提案手法のモデル構造を示せ（図）。 / Explain the structure of the model.
+
+
+○入力を数式（またはx等の記号）で定義し説明せよ。各入力はそれぞれ何次元か？ / Define the input to the proposed method.
+モデルパラメータx∈R^dを入力とする。各ノードiは、自身のモデルと隣接ノードjのモデルを用いて、ローカルデータξ_iで損失を計算する。
+
+▲どのように入力特徴を抽出したのか（例えばバックボーンネットワークについて説明せよ）？ / Explain how the input features are extracted.
+
+
+○１個目のモジュールのmotivation・役割・入出力・構造を示して説明せよ。 / Explain the motionvation, role, input-output, and structure of the 1st module.
+Loss-based filtering moduleの役割は、性能ベースの学習の初期段階でbenignモデルとByzantineモデルを区別する課題を克服することである。各ノードiは、ローカルデータを用いて以下の条件を満たすモデルのみを統合する：F_i(x;ξ_i) - F_j(x;ξ_i) ≧ θ。ここで、θは学習初期段階では高く設定され、自ノードのモデルよりも汎化性能が高いモデルを選択する。
+
+○N個目のモジュールのmotivation・役割・入出力・構造を示して説明せよ。（この項目を個数分コピーしてください） / Explain the motivation, role, input-output, and structure of the N-th module. (Copy this question if needed)
+Overfitting detection and threshold adjustment moduleの役割は、過学習を検出し、しきい値θを動的に調整することである。各ノードは、エポック終了時にテスト誤差を計算し、5エポック連続で最小テスト誤差が更新されない場合、過学習が発生したと判断する。過学習検出時にはθを0.1ずつ減少させるが、Byzantineモデルの浸入を防ぐため、θの下限は-0.1に設定される。
+
+▲予測を数式で定義せよ。 / Define the prediction.
+
+
+▲損失関数の定義を示せ。 / What is the embedding loss function? What are the alternatives?
+
+
+
+５．実験設定 / Experimental Setup（5/11完了）
+○（既存データセットを使ったのであれば）何というデータセットを使用したか？（新規構築したのであれば）どのようにデータセットを構築したか？ / Explain about the dataset. If the dataset was constructed in this study, explain how to construct it.
+CIFAR-10データセット[14]を使用した。データは各クライアントに対して独立同分布（IID）となるように分散された。
+
+▲データセットのアノテーション方法（アノテータへ何を指示したか）を示せ。 / Explain about the instructions given to the annotators.
+
+
+○なぜ標準データセットを使わなかったのか？使ったのであれば、なぜ使ったのか？ / Why did not you use the standard data set? If you did, why?
+CIFAR-10は分散学習およびByzantine攻撃の研究において標準的に使用されるデータセットであり、既存手法との公平な比較を可能にするため使用した。
+
+▲データセットをどのように事前処理（またはデータ拡張）したか？ / How was the dataset pre-processed?
+
+
+▲データセットの統計情報をしめせ。サンプル数、語彙サイズ（ユニーク語数）、全単語数、平均文長、言語、アノテータの数、シミュレーション or 実機、等について説明せよ。 / Explain about the statistics of the dataset: dataset size, vocabulary size (#unique words), # of total words, average sentence length, language, # of annotators, simulation or real-world.
+
+
+▲training set（訓練集合）・validation set（検証集合）・test set（テスト集合）をどのように分割したか？各々のサイズを示せ。 / How was the dataset divided into training set, validation set, and test set? Indicate the size of each.
+
+
+▲training set（訓練集合）・validation set（検証集合）・test set（テスト集合）を各々どのように使用したか？ / How was the training set, validation set, and test set each used?
+
+
+○提案手法の設定（最適化手法、エポック数、ハイパーパラメータ等）を表にまとめよ。 / Show a table about experimental setup for the proposed method, such as optimization method, number of epochs, and hyperparameters.
+学習率：0.01（全ノード共通）、バッチサイズ：256、momentum係数：0.9、α（集約時の重み）：0.5、初期しきい値θ：0.1、θの下限：-0.1、θの減少幅：0.1、過学習判定エポック数：5
+
+○提案手法のパラメータ数と積和演算数（Multiply-add operations）を示せ。 / How many parameters and multiply-add operations does the model have?
+CNNモデルは2つの畳み込み層と2つの全結合層から構成される。
+
+○訓練に用いたハードウェア構成を示せ。 / Explain about the spec of the machine used in the experiment. 
+シミュレーション環境で実験を実施した。ネットワーク内のノード数は10、接続率Crは0.4とした。
+
+▲訓練に要した時間を示せ。また、１サンプルあたりの推論に要した時間を示せ。 / How long did it take for training? Explain the inference time per sample.
+
+
+
+６．実験結果 / Experimental Results（3/14完了）
+○ベースライン手法との定量的比較結果を示せ。 / Show the quantitative comparison results with the baseline method(s).
+Max AttackおよびA little is enough攻撃に対して、提案手法は既存手法（D_Krum、UBAR、D_Zeno）と比較して高速に収束し、Byzantineノード比率が増加しても効果を維持する。特にByzantineノード比率が0.5の場合、既存手法の精度が大幅に低下する中、提案手法は0.5以上の精度を維持する。
+
+○何をベースライン手法（群）としたか？ / What was used as the baseline method(s)?
+D_Krum [10]、UBAR [12]、D_Zeno [11]をベースライン手法として使用した。
+
+○上記ベースラインを選んだ理由を説明せよ。 / Explain the reason for choosing the above baseline(s).
+これらの手法は、Byzantine耐性を持つ分散学習における代表的な手法であり、距離ベース、性能ベース、およびハイブリッドアプローチをカバーしているため、提案手法の有効性を包括的に評価できる。
+
+▲評価尺度（群）について数式で説明せよ。複数あるのであれば、どれが主要尺度か？ / Explain the metric(s) by using equations. Which one is the primary metric?
+
+
+▲なぜそれらの評価尺度を使用したのか？他の評価尺度ではダメなのか？ / Why did you use those evaluation metrics? Why not other metrics?
+
+
+▲ベースラインと提案手法の性能を（相対的な性能差ではなく）絶対的な値で示せ。 / Show the performance of the baseline and proposed methods in absolute values, not relative performance differences.
+
+
+▲実験結果は統計的に有意（p<0.05）であったか？ / Were the experimental results statistically significant (p<0.05)?
+
+
+▲定性的結果：提案手法が成功した例（N個）を示せ。Ground Truth、ベースライン手法、提案手法による予測結果をそれぞれ示せ。 / Qualitative results: Show examples (N) of successful cases of the proposed method. Show the Ground Truth, predictions by the baseline method, and predictions by the proposed method respectively.
+
+
+▲定性的結果：提案手法が失敗した例（M個、N>M）を示せ。なぜ失敗したのか？ / Qualitative results: Show M examples of failure cases of the proposed method (where N>M). Why did they fail?
+
+
+▲Ablation studyにおいて何のために何を取り除いたかを説明せよ。 定量的結果に基づき、取り除いた要素が有効だったことを示せ。なぜ有効だったのかを説明せよ。 / Explain what is ablated.
+
+
+▲混同行列（Confusion matrix）を示せ。 / Show the confusion matrix.
+
+
+▲提案手法の失敗例は予測結果の中に合計何サンプルあったか？ / How many failure cases were included in the prediction results?
+
+
+▲失敗例を人手でカテゴリに分類せよ。各カテゴリの定義を示せ。 / Classify the failure cases into categories manually. Show the definitions of each category.
+
+
+▲失敗の主要な要因（main bottleneck）とpossible solutionについて説明せよ。 / Explain about the main bottleneck and the possible solution.
+
+
+
+７．結論 / Conclusions（2/3完了）
+○本研究ではどのようなタスクを扱ったか？ / What kind of task was addressed?
+Byzantine耐性を持つ分散学習において、性能ベースアプローチの課題を克服する新しいフィルタリング手法を提案した。
+
+○本研究の貢献（contributions）を過去形で箇条書きせよ。 / List the contributions of this study in the past tense.
+1. 損失関数値に基づく新しいフィルタリング手法を提案した
+2. 学習初期段階でのByzantineノードとBenignノードの区別問題を、高いしきい値設定により解決した
+3. シミュレーション実験により、提案手法が既存手法より高速に収束し、Byzantineノード比率が増加しても精度を維持することを実証した
+4. Byzantineノード比率が0.5の場合でも、提案手法が0.5以上の精度を維持することを示した
+
+▲将来研究は何か？ / What is the future study?
+しきい値θの動的調整および提案手法の収束解析に焦点を当てる予定である。
