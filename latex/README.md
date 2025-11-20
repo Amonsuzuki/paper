@@ -22,3 +22,23 @@ This directory contains LaTeX conversions of PDF papers from the repository.
 - Ensure you have all required LaTeX packages installed
 - Use pdflatex or similar LaTeX compiler
 - Some figures and complex mathematical formulas may need manual adjustment
+
+### 2311.00196v2.tex
+**Title:** Machine learning for accuracy in density functional approximations
+
+**Author:** Johannes Voss
+
+**Source PDF:** `pdf/ml-dft/2311.00196v2.pdf`
+
+**Conversion Details:**
+- Extracted from 36-page PDF
+- Complete LaTeX document with proper structure
+- Includes all necessary packages for scientific document formatting
+- Contains abstract, keywords, introduction, and all main sections
+- Full references section with 220+ citations
+- File size: ~89 KB, 2,095 lines
+
+**Note:** This LaTeX file was automatically converted from the PDF. For optimal compilation:
+- Ensure you have all required LaTeX packages installed
+- Use pdflatex or similar LaTeX compiler
+- Some figures and complex mathematical formulas may need manual adjustment
