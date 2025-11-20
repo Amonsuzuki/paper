@@ -1,0 +1,16 @@
+# 60QA for "Overcoming the Barrier of Orbital-Free Density Functional Theory for Molecular Systems Using Deep Learning"
+
+## 1. Introduction (0/10 completed)
+
+### Question 1. What is the social background of this research?
+
+Density functional theory (DFT) is a powerful quantum chemistry method that has become one of the most popular computational approaches for solving electronic states and determining the energy and properties of molecular systems. Its widespread adoption stems from providing an appropriate balance between accuracy and computational efficiency, which has enabled numerous scientific discoveries across chemistry, materials science, and related fields. The prevailing Kohn-Sham DFT (KSDFT) formulation, while highly successful, requires optimizing N orbital functions for an N-electron system, resulting in computational complexity that scales as O(N³). This higher complexity is increasingly problematic for contemporary research where large-scale system simulations are in high demand for practical applications. The computational burden limits the ability to study larger molecules, proteins, and complex molecular systems that are crucial for understanding real-world phenomena in drug discovery, materials design, and biological processes. Consequently, there is growing interest in orbital-free DFT (OFDFT), which follows the original spirit of DFT by optimizing a single electron density function rather than multiple orbital functions, thereby reducing computational complexity to O(N²). However, OFDFT's accuracy has been limited by the challenge of approximating the kinetic energy density functional, particularly for non-periodic molecular systems where electron density is highly non-uniform. Recent advances in machine learning, especially deep learning, present new opportunities to overcome this accuracy barrier by learning complex functional approximations from data, potentially enabling efficient and accurate quantum chemistry calculations for large-scale molecular systems.
+
+**Technical Terms:**
+- **Density Functional Theory (DFT)**: A quantum mechanical method for calculating the electronic structure of many-body systems by using electron density rather than wave functions as the fundamental variable.
+- **Kohn-Sham DFT (KSDFT)**: The prevailing formulation of DFT that represents the system using N orbital functions for N electrons, allowing explicit calculation of non-interacting kinetic energy.
+- **Orbital-Free DFT (OFDFT)**: An alternative DFT formulation that optimizes only the electron density function, eliminating the need to compute individual orbitals and reducing computational complexity.
+- **Electron Density (ρ(r))**: The probability distribution of electrons in space, representing the one-body reduced density.
+- **Kinetic Energy Density Functional (KEDF)**: The functional that approximates the non-interacting kinetic energy of electrons as a function of electron density, denoted as T_S[ρ].
+- **Computational Complexity Scaling**: The relationship between system size (N electrons) and computational cost; O(N³) for KSDFT versus O(N²) for OFDFT.
+- **Non-periodic Molecular Systems**: Molecules that lack the repeating lattice structure found in crystalline materials, making them more challenging for OFDFT approximations.
