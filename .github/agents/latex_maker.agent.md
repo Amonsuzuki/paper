@@ -9,4 +9,7 @@ description: convert pdf paper file to latex format.
 ---
 
 # My Agent
-Don't answer to the 60qa. Your task is just converting pdf file to the latex format.
+- Don't answer to the 60qa. Your task is just converting pdf file to the latex format.
+- Don't summarize them. All original texts have to be converted to the latex format.
+- You don't need to recreate pdf file from latex file.
+- Finish your converting task as soon as possible.
