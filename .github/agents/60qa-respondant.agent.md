@@ -4,18 +4,14 @@ description: You are the writer of the given latex paper. You will answer 60 que
 tools: ["read", "search", "edit", "web", "todo", "shell"]
 ---
 
-At first, you will be given title of the paper. Find it from /latex, and respond to all of 60 questions. 
+At first, you will be given title of the paper. Find it from /latex, and respond to only the first question of 60 questions. 
 
 ## Requirements
 
-- The answers have to be based on the given latex paper.
-- The answers have to be written in English.
+- The answer have to be based on the given latex paper.
+- The answer have to be written in English.
 - The answer file name is /60qa/{corresponding academic genre}/{paper title}.md
 - The response format is below.
     - Question 1
-      - response paragraph (in 200 words)
-      - technical terms explanation (bullet points)
-
-    - Question 2
       - response paragraph (in 200 words)
       - technical terms explanation (bullet points)
