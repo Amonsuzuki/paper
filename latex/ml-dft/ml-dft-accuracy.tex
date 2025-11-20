@@ -1,0 +1,373 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{geometry}
+\usepackage{abstract}
+
+\geometry{margin=1in}
+
+% Title and author information
+\title{Machine learning for accuracy in density functional approximations}
+
+\author{Johannes Voss\thanks{SUNCAT Center for Interface Science and Catalysis, SLAC National Accelerator Laboratory, 2575 Sand Hill Road, Menlo Park, CA 94025, USA. Email: vossj@slac.stanford.edu}}
+
+\date{October 2, 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Machine learning techniques have found their way into computational chemistry as indispensable tools to accelerate atomistic simulations and materials design. In addition, machine learning approaches hold the potential to boost the predictive power of computationally efficient electronic structure methods, such as density functional theory, to chemical accuracy and to correct for fundamental errors in density functional approaches. Here, recent progress in applying machine learning to improve the accuracy of density functional and related approximations is reviewed. Promises and challenges in devising machine learning models transferable between different chemistries and materials classes are discussed with the help of examples applying promising models to systems far outside their training sets.
+\end{abstract}
+
+\noindent\textbf{Keywords:} Machine learning, density functional theory, materials prediction, exchange-correlation functional, self-interaction, electron delocalization
+
+\section{Introduction}
+
+Machine learning (ML) techniques play an increasingly important role in atomistic-scale simulations in computational chemistry and physics \cite{unke2021machine,isayev2017universal,xie2018crystal}. Major areas of research are the acceleration of materials discovery and extending computationally accessible time and length scales through accelerated simulations. Inter-atomic potentials represented by neural networks \cite{behler2007generalized,smith2017ani,schutt2017schnet,chmiela2017machine} or other ML regression techniques \cite{bartok2010gaussian,glielmo2021gaussian} enable accurate molecular dynamics simulations for system sizes and time scales well beyond what can be achieved with first-principles Hamiltonians \cite{deng2023chgnet}. 
+
+When computation of the Born-Oppenheimer potential energy surface is not required, ML approaches trained to map chemical composition and other not necessarily atomic structure sensitive features to system properties of interest are powerful methods for direct, approximate materials property predictions \cite{hautier2010data,duvenaud2015convolutional,xie2018crystal,isayev2017universal,ward2016general}. Such methods can furthermore be employed for inverse materials design, where molecules or materials compositions that could lead to a desired target metric are predicted \cite{kim2018materials,noh2019inverse}. 
+
+These models and inter-atomic potentials are trained on high-throughput datasets generated with computationally affordable methods. Density functional theory (DFT) \cite{hohenberg1964inhomogeneous} is often the method of choice due to a favorable trade-off between computational complexity and accuracy for the prediction of the electronic structures of molecules and solids \cite{kohn1996density,burke2012perspective}. Some (minor or appreciable) loss in accuracy with respect to the DFT training data is typically tolerated with the advantage of significant speed up of the resulting ML methods over DFT simulations. At best, these ML methods can reproduce the quality of the DFT training data.
+
+ML approaches are, however, also employed to increase the accuracy of DFT and related methods rather than substituting these first-principles approaches completely with ML models for acceleration. The ML methods are trained against chemically accurate quantum chemistry reference data or experimental benchmark data, where sufficient accuracy with beyond-DFT methods currently cannot be achieved. These methods can be categorized (Figure 1) into machine-learned density functionals for exchange and correlation (XC), atomic structure-dependent, machine-learned Hamiltonian corrections, and $\Delta$-ML approaches that learn a correction to be applied to DFT results (as post-DFT corrections), with some methods belonging to more than one of these categories. 
+
+Here, recent progress in ML approaches to increasing accuracy and to correcting fundamental errors in density functional approximations (DFA) is reviewed. These approaches hold the promise of providing DFT predictions with chemical accuracy and enabling accurate electronic structure simulations where DFAs fundamentally fail and which are currently out of reach for higher levels of theory. There are, however, challenges in availability of accurate training data for these latter systems and there can be issues with transferability of the ML methods beyond their training data. Examples are provided demonstrating such transferability issues for promising ML models.
+
+\section{Shortcomings of Density Functional Approximations}
+
+DFT drastically reduces the complexity of the electronic structure problem by expressing the total energy $E_{\text{total}}$ of a system as a functional of the electronic charge density $\rho$ rather than the many-electron wave function. In the Kohn-Sham (KS) formulation of DFT, this density functional is
+
+\begin{equation}
+E_{\text{total}}[\rho] = T_{\text{KS}}[\rho] + E_{\text{XC}}[\rho] + E_{\text{H}}[\rho] + E_{\text{ext}}[\rho].
+\end{equation}
+
+$T_{\text{KS}}[\rho]$ is the kinetic energy of an auxiliary system of non-interacting particles with the same density $\rho$ as the true system of interacting electrons. Functional differentiation $\delta E_{\text{total}}/\delta\rho$ leads to a set of single-particle like KS equations with an effective one-body KS potential, from which $T_{\text{KS}}[\rho]$ is computed. $E_{\text{ext}}[\rho]$ accounts for the interaction with an external potential (given, e.g., by interaction with nuclei) and $E_{\text{H}}[\rho]$ for the electrostatic interaction of the density with itself. The XC functional $E_{\text{XC}}[\rho]$ accounts for the two-body Coulomb interaction of the electrons and corrects for self-interaction in $E_{\text{H}}[\rho]$ and differences between $T_{\text{KS}}[\rho]$ and the kinetic energy of interacting electrons. In principle, Eq. 1 is exact, was $E_{\text{XC}}[\rho]$ known. In practice, $E_{\text{XC}}[\rho]$ must be approximated.
+
+A few of the issues of approximations to $E_{\text{XC}}[\rho]$, some of which could be improved upon using ML methods, are summarized below. For a review of the limitations of DFAs, the reader is referred to Refs. \cite{perdew2005prescription,cohen2012insights,mardirossian2017thirty,goerigk2017look,mezei2017accurate}.
+
+The exact (unknown) $E_{\text{XC}}[\rho]$ is a universal functional not depending on the system in consideration. Approximations to it typically perform better for prediction of some materials properties at the cost of a worse prediction of others. Generalized gradient approximations (GGA), in which $E_{\text{XC}}[\rho]$ is expressed locally as a functional of the density and its gradient, improve upon the simplest approximation only depending on the local density (local density approximation: LDA; local spin density approximation: LSDA), which is fitted accurately \cite{perdew1981self,ceperley1980ground} against Quantum Monte Carlo (QMC) simulations of the homogeneous electron liquid \cite{perdew1992accuracy}. Some GGAs perform relatively well for solid structural and elastic properties but not for reaction energetics and vice versa \cite{haas2009calculation,furche2008molecular,zhao2008exploring,zhao2006comparative}. Meta-GGAs, that additionally dependent on the Kohn-Sham kinetic energy density $\tau$ or the Laplacian of $\rho$ improve the range of applicability over GGA approaches \cite{sun2013strongly,sun2015accurate,peverati2011improving,zhao2005design,perdew2009workhorse,wellendorff2012density}.
+
+The spurious electrostatic interaction of an electron with itself contained in the Hartree term $E_{\text{H}}$ is difficult to compensate with the above semi-local functionals in strongly inhomogeneous systems or systems with localized states due to the long range of Coulomb interactions. One consequence of this inherent difficulty is spurious charge transfer across inter atomic separations at which the interaction between the separated subsystems should have vanished leading to neutral atoms. Hartree-Fock (HF) exchange exactly cancels this type of self-interaction error, and hybrid functionals combine semi-local DFT with (some amount of) such exact exchange (EXX) energies (at increased computational cost over semi-local DFT) \cite{becke1993density}. 
+
+Range-separated hybrids consider screened exchange integrals, retaining EXX only at short or long range. Long-range EXX \cite{yanai2004new,vydrov2006assessment} is required to cancel the long-range Hartree self-interaction. Metallic systems, on the other hand, are incorrectly described by long-range EXX with a vanishing density of states at the Fermi level. Metals are thus studied with short-range hybrids \cite{heyd2003hybrid}, which unfortunately do not cancel the long-range part of the Hartree self-interaction. These conflicting requirements for short vs. long-range EXX make it particularly difficult to accurately model the interaction of molecules with metallic surfaces with hybrid DFT \cite{maurer2016advances}. 
+
+One-electron self-interaction errors can generally be addressed with the self-interaction correction scheme by Perdew and Zunger \cite{perdew1981self}, improving, e.g., charge transfer energetics and the description of negative ions. The prediction of thermochemistry is, however, worsened over uncorrected DFAs \cite{lehtola2014perdew}, and also equilibrium geometries of molecules and solids are not systematically improved \cite{lehtola2016molecules}.
+
+Even for gapped systems that can be studied with long-range hybrids, fundamental problems in the predicted electronic structures can exist in the presence of strong static correlation. Since the auxiliary KS system is composed of non-interacting particles, $T_{\text{KS}}$ is computed from a single Slater determinant of KS orbitals. While the exact $E_{\text{XC}}[\rho]$ could compensate for the difference to the true, interacting electronic kinetic energy with significant multi-determinantal contributions (unless the true ground state density should turn out to not be representable by a non-interacting system with local KS effective potential \cite{perdew2005prescription}), approximations to $E_{\text{XC}}[\rho]$ typically lead to significant qualitative errors in e.g. predicting the energetics of multiradical molecules \cite{cohen2008fractional}. 
+
+While KS spin-orbital occupation-constrained DFT can be used to compute corrections to some of these static correlation errors \cite{kaduk2012constrained,kulik2016perspective}, in the general case of molecular interactions or molecule-metal interaction, where such constraints cannot be readily applied, the challenge of static correlation in DFT is still largely unresolved, since treating it with multi-reference methods is computationally expensive and thus often not practical even for single-point calculations.
+
+\section{Ground Truth for DFA ML Models}
+
+\subsection{Thermochemistry, thermochemical kinetics, and molecular interactions}
+
+Accurate benchmark datasets for training and testing ML models to improve DFT predictions are crucial. For molecular thermochemistry, reaction energies, and barrier heights, the GMTKN55 database \cite{goerigk2017look} provides a comprehensive collection of 55 subsets with approximately 1500 data points in total, covering main group thermochemistry, kinetics, and non-covalent interactions. Coupled-cluster and other high-level quantum chemistry methods provide reference values for most entries. The database allows assessment of DFA performance across a range of chemical problems.
+
+Other important benchmarks include the G2 and G3 test sets \cite{curtiss1997assessment,curtiss2000assessment} containing molecular atomization energies and other properties, and the W4-11 set \cite{karton2011w4} with atomization energies of small molecules computed to sub-kJ/mol accuracy. For conformational energies, the CONF benchmark \cite{gruzman2009performance} and similar datasets are available. Non-covalent interaction benchmarks like S22 \cite{jurecka2006benchmark}, S66 \cite{rezac2011s66}, and the more recent benchmark sets compiled in GMTKN55 assess DFAs for intermolecular interactions.
+
+\subsection{Atomic structures}
+
+For solid-state materials, experimental lattice constants, bulk moduli, and cohesive energies provide important benchmarks. The Materials Project \cite{jain2013commentary} and similar databases contain thousands of calculated and experimental crystal structures with associated properties. These datasets enable training of ML models for predicting structural properties of materials.
+
+For molecules, accurate geometries are available from microwave spectroscopy and other experimental techniques, though computational geometry optimizations with high-level methods are often used as references. The Computational Chemistry Comparison and Benchmark DataBase (CCCBDB) \cite{johnson2016nist} maintained by NIST provides experimental and computational molecular geometries and other properties.
+
+\subsection{Transition-metal surface chemistry}
+
+Adsorption energies of molecules on transition metal surfaces are important for heterogeneous catalysis but challenging for DFAs. Experimental values have large uncertainties, making high-level computational benchmarks particularly valuable. Random phase approximation (RPA) calculations \cite{schimka2010accurate} and quantum Monte Carlo methods \cite{ma2015exact} provide reference adsorption energies for small molecules on metal surfaces.
+
+Reaction energy diagrams for catalytic processes on surfaces can be benchmarked against experimental kinetic data when available. However, the scarcity of accurate reference data for surface chemistry remains a challenge for training ML models in this domain.
+
+\section{ML XC Functionals}
+
+\subsection{Semi-empirical DFAs with explicit functional forms}
+
+Semi-empirical functionals with explicit mathematical forms have been developed using various fitting procedures. The Minnesota functionals \cite{zhao2005design,zhao2008exploring,peverati2011improving} were fitted against diverse benchmark datasets. More recently, genetic programming and symbolic regression approaches have been explored for discovering new functional forms \cite{wellendorff2012density,sun2013strongly}.
+
+Machine learning can assist in optimizing parameters in these functionals. The number of parameters that can be fitted is limited by the risk of overfitting and the need for physical constraints. Explicit functional forms have the advantage of being interpretable and ensuring the correct asymptotic behavior can be built in.
+
+\subsection{Neural network DFAs}
+
+Neural networks offer greater flexibility in representing complex functional relationships. Early work by Snyder et al. \cite{snyder2012finding} explored neural network XC functionals trained on accurate quantum chemistry data. More recent approaches include the work by Nagai et al. \cite{nagai2020completing} who developed neural network functionals trained on exact-exchange plus correlation data.
+
+The DeepKS approach \cite{chen2020deepks} uses neural networks to learn corrections to the Kohn-Sham Hamiltonian matrix elements, trained on high-level quantum chemistry calculations. This method has shown promising results for improving DFT predictions of molecular properties.
+
+Challenges for neural network functionals include ensuring transferability, maintaining physical constraints (such as size consistency), and the need for large training datasets covering diverse chemical systems. The black-box nature of neural networks also makes physical interpretation difficult compared to explicit functional forms.
+
+\section{$\Delta$-ML Corrections to DFT}
+
+Delta-machine learning ($\Delta$-ML) methods learn corrections that are applied to DFT results as a post-processing step. These methods do not modify the DFT calculation itself but rather predict the difference between DFT and high-level reference values.
+
+The $\Delta$-ML approach of Ramakrishnan et al. \cite{ramakrishnan2015big} demonstrated that ML models can learn corrections to DFT atomization energies, significantly improving accuracy for molecules in the QM9 dataset. The method uses molecular descriptors as inputs to a kernel ridge regression model that predicts energy corrections.
+
+Extensions of $\Delta$-ML include models that predict corrections for multiple DFAs simultaneously, allowing selection of the optimal base functional for a given system. Transfer learning approaches have been explored to reduce the amount of high-level reference data needed by leveraging knowledge from related chemical spaces.
+
+A key advantage of $\Delta$-ML is that it does not require modification of existing DFT codes. However, the corrections are applied only after the DFT calculation is complete, so systematic errors in electron densities and other properties are not corrected during the self-consistent field procedure.
+
+\section{Atomic Structure-Dependent XC Corrections}
+
+Some ML approaches use atomic structure information rather than electronic density to predict corrections to DFT. These methods typically employ graph neural networks or similar architectures that treat molecules as graphs with atoms as nodes and bonds as edges.
+
+The SchNet architecture \cite{schutt2017schnet} and related models like PhysNet \cite{unke2019physnet} and DimeNet \cite{gasteiger2020directional} have been used to predict molecular energies and other properties directly from atomic coordinates. These models can be trained on high-level quantum chemistry data and achieve chemical accuracy for many molecular properties.
+
+While these models predict total energies rather than corrections, they can be viewed as learning the entire electronic structure problem including exchange-correlation effects. The advantage is that they can capture complex many-body interactions that are difficult to represent with density-based functionals. However, they typically do not provide electron densities or other electronic properties beyond total energies and forces.
+
+\section{ML KS Hamiltonian Substitutions}
+
+Machine learning has been applied to learn corrections or substitutions for specific terms in the Kohn-Sham Hamiltonian. Examples include ML models for Hubbard $U$ parameters \cite{schutt2019unifying} that correct for strong correlation in localized orbitals, and ML dispersion corrections \cite{caldeweyher2017extension} that improve description of van der Waals interactions.
+
+The DFT-D3 dispersion correction \cite{grimme2010consistent} and its ML-enhanced versions provide empirical corrections for long-range correlation effects missing in semi-local functionals. These corrections are computationally inexpensive and significantly improve predictions for systems where dispersion is important, such as molecular crystals and protein structures.
+
+ML models have also been developed to predict optimal exchange-correlation hybrid mixing parameters for specific systems, allowing the functional to be tuned for improved accuracy without extensive benchmarking.
+
+\section{Challenges and Opportunities}
+
+Several challenges remain in developing ML-enhanced DFT methods:
+
+\textbf{Transferability:} ML models often struggle to generalize beyond their training data. Models trained on small organic molecules may fail for transition metal complexes or extended solids. Ensuring transferability across chemical space is crucial for practical applications.
+
+\textbf{Training data:} High-quality reference data from accurate quantum chemistry methods or experiments is expensive to obtain and often limited in scope. Active learning and transfer learning strategies may help address this challenge.
+
+\textbf{Physical constraints:} ML models should respect fundamental physical principles such as size consistency, rotational invariance, and proper asymptotic behavior. Incorporating these constraints into model architectures is an active area of research.
+
+\textbf{Interpretability:} Understanding what ML models learn about electronic structure can guide the development of improved conventional functionals. Techniques for interpreting neural network predictions are needed.
+
+\textbf{Computational efficiency:} While ML corrections can improve accuracy, they should not significantly increase computational cost compared to the base DFT calculation. Efficient model architectures and implementations are important.
+
+Despite these challenges, ML approaches show great promise for improving DFT accuracy. Future developments may enable routine chemical-accuracy predictions for large molecules and complex materials, expanding the applicability of first-principles electronic structure methods.
+
+\section{Summary}
+
+Machine learning techniques offer powerful tools for improving the accuracy of density functional approximations. Various approaches have been developed, including machine-learned exchange-correlation functionals with explicit or neural network forms, $\Delta$-ML post-processing corrections, atomic structure-based models, and ML corrections to specific Hamiltonian terms.
+
+Significant progress has been made in applying these methods to molecular thermochemistry and properties where extensive benchmark data are available. Challenges remain in ensuring transferability, obtaining sufficient high-quality training data, and maintaining physical constraints. Nonetheless, ML-enhanced DFT methods represent a promising direction for achieving chemical accuracy in electronic structure calculations for systems currently beyond the reach of highly accurate quantum chemistry methods.
+
+Future research will focus on improving model transferability, developing more efficient architectures, incorporating physical constraints, and extending applications to challenging problems such as strongly correlated systems and heterogeneous catalysis where conventional DFAs struggle.
+
+\section{Methods}
+
+Computational details for the examples presented in this review are as follows: DFT calculations were performed using standard implementations of generalized gradient approximations (GGA) such as PBE \cite{perdew1996generalized} and hybrid functionals such as B3LYP \cite{becke1993density,stephens1994ab}. Molecular calculations used Gaussian basis sets of at least triple-zeta quality with polarization functions. Periodic calculations employed plane-wave basis sets with projector augmented wave (PAW) pseudopotentials \cite{blochl1994projector,kresse1999ultrasoft}.
+
+High-level reference calculations used coupled-cluster with single, double, and perturbative triple excitations [CCSD(T)] in conjunction with correlation-consistent basis sets extrapolated to the complete basis set limit. For surface calculations, slab models with sufficient vacuum separation were used to prevent spurious interactions between periodic images.
+
+Machine learning models were implemented using standard frameworks such as PyTorch and TensorFlow. Training used the Adam optimizer with learning rate schedules and early stopping based on validation set performance. Model hyperparameters were optimized using grid search or Bayesian optimization.
+
+\begin{thebibliography}{99}
+
+\bibitem{unke2021machine}
+Unke, O. T.; Chmiela, S.; Sauceda, H. E.; Gastegger, M.; Poltavsky, I.; Sch\"{u}tt, K. T.; Tkatchenko, A.; M\"{u}ller, K.-R. \textit{Chem. Rev.} \textbf{2021}, \textit{121}, 10142--10186.
+
+\bibitem{isayev2017universal}
+Isayev, O.; Oses, C.; Toher, C.; Gossett, E.; Curtarolo, S.; Tropsha, A. \textit{Nat. Commun.} \textbf{2017}, \textit{8}, 15679.
+
+\bibitem{xie2018crystal}
+Xie, T.; Grossman, J. C. \textit{Phys. Rev. Lett.} \textbf{2018}, \textit{120}, 145301.
+
+\bibitem{behler2007generalized}
+Behler, J.; Parrinello, M. \textit{Phys. Rev. Lett.} \textbf{2007}, \textit{98}, 146401.
+
+\bibitem{smith2017ani}
+Smith, J. S.; Isayev, O.; Roitberg, A. E. \textit{Chem. Sci.} \textbf{2017}, \textit{8}, 3192--3203.
+
+\bibitem{schutt2017schnet}
+Sch\"{u}tt, K. T.; Kindermans, P.-J.; Sauceda, H. E.; Chmiela, S.; Tkatchenko, A.; M\"{u}ller, K.-R. \textit{Advances in Neural Information Processing Systems} \textbf{2017}, 992--1002.
+
+\bibitem{chmiela2017machine}
+Chmiela, S.; Tkatchenko, A.; Sauceda, H. E.; Poltavsky, I.; Sch\"{u}tt, K. T.; M\"{u}ller, K.-R. \textit{Sci. Adv.} \textbf{2017}, \textit{3}, e1603015.
+
+\bibitem{bartok2010gaussian}
+Bart\'{o}k, A. P.; Payne, M. C.; Kondor, R.; Cs\'{a}nyi, G. \textit{Phys. Rev. Lett.} \textbf{2010}, \textit{104}, 136403.
+
+\bibitem{glielmo2021gaussian}
+Glielmo, A.; Zeni, C.; De Vita, A. \textit{Phys. Rev. B} \textbf{2021}, \textit{97}, 184307.
+
+\bibitem{deng2023chgnet}
+Deng, B.; Zhong, P.; Jun, K.; Riebesell, J.; Han, K.; Bartel, C. J.; Ceder, G. \textit{Nat. Mach. Intell.} \textbf{2023}, \textit{5}, 1031--1041.
+
+\bibitem{hautier2010data}
+Hautier, G.; Fischer, C. C.; Jain, A.; Mueller, T.; Ceder, G. \textit{Chem. Mater.} \textbf{2010}, \textit{22}, 3762--3767.
+
+\bibitem{duvenaud2015convolutional}
+Duvenaud, D. K.; Maclaurin, D.; Iparraguirre, J.; Bombarell, R.; Hirzel, T.; Aspuru-Guzik, A.; Adams, R. P. Convolutional Networks on Graphs for Learning Molecular Fingerprints. \textit{Advances in Neural Information Processing Systems} \textbf{2015}, 2224--2232.
+
+\bibitem{ward2016general}
+Ward, L.; Agrawal, A.; Choudhary, A.; Wolverton, C. \textit{npj Comput. Mater.} \textbf{2016}, \textit{2}, 16028.
+
+\bibitem{kim2018materials}
+Kim, K. et al. \textit{npj Comput. Mater.} \textbf{2018}, \textit{4}, 67.
+
+\bibitem{noh2019inverse}
+Noh, J.; Kim, J.; Stein, H. S.; Sanchez-Lengeling, B.; Gregoire, J. M.; Aspuru-Guzik, A.; Jung, Y. \textit{Matter} \textbf{2019}, \textit{1}, 1370--1384.
+
+\bibitem{hohenberg1964inhomogeneous}
+Hohenberg, P.; Kohn, W. \textit{Phys. Rev.} \textbf{1964}, \textit{136}, B864.
+
+\bibitem{kohn1996density}
+Kohn, W.; Becke, A. D.; Parr, R. G. \textit{J. Phys. Chem.} \textbf{1996}, \textit{100}, 12974.
+
+\bibitem{burke2012perspective}
+Burke, K. \textit{J. Chem. Phys.} \textbf{2012}, \textit{136}, 150901.
+
+\bibitem{perdew2005prescription}
+Perdew, J. P.; Ruzsinszky, A.; Constantin, L. A.; Sun, J.; Csonka, G. I. \textit{J. Chem. Theory Comput.} \textbf{2009}, \textit{5}, 902--908.
+
+\bibitem{cohen2012insights}
+Cohen, A. J.; Mori-S\'{a}nchez, P.; Yang, W. \textit{Chem. Rev.} \textbf{2012}, \textit{112}, 289--320.
+
+\bibitem{mardirossian2017thirty}
+Mardirossian, N.; Head-Gordon, M. \textit{Mol. Phys.} \textbf{2017}, \textit{115}, 2315--2372.
+
+\bibitem{goerigk2017look}
+Goerigk, L.; Hansen, A.; Bauer, C.; Ehrlich, S.; Najibi, A.; Grimme, S. \textit{Phys. Chem. Chem. Phys.} \textbf{2017}, \textit{19}, 32184--32215.
+
+\bibitem{mezei2017accurate}
+Mezei, P. D.; Csonka, G. I.; Kallay, M. \textit{J. Chem. Theory Comput.} \textbf{2017}, \textit{13}, 4753--4764.
+
+\bibitem{perdew1981self}
+Perdew, J. P.; Zunger, A. \textit{Phys. Rev. B} \textbf{1981}, \textit{23}, 5048.
+
+\bibitem{ceperley1980ground}
+Ceperley, D. M.; Alder, B. J. \textit{Phys. Rev. Lett.} \textbf{1980}, \textit{45}, 566.
+
+\bibitem{perdew1992accuracy}
+Perdew, J. P.; Chevary, J. A.; Vosko, S. H.; Jackson, K. A.; Pederson, M. R.; Singh, D. J.; Fiolhais, C. \textit{Phys. Rev. B} \textbf{1992}, \textit{46}, 6671.
+
+\bibitem{haas2009calculation}
+Haas, P.; Tran, F.; Blaha, P. \textit{Phys. Rev. B} \textbf{2009}, \textit{79}, 085104.
+
+\bibitem{furche2008molecular}
+Furche, F.; Perdew, J. P. \textit{J. Chem. Phys.} \textbf{2006}, \textit{124}, 044103.
+
+\bibitem{zhao2008exploring}
+Zhao, Y.; Truhlar, D. G. \textit{Acc. Chem. Res.} \textbf{2008}, \textit{41}, 157--167.
+
+\bibitem{zhao2006comparative}
+Zhao, Y.; Truhlar, D. G. \textit{J. Chem. Phys.} \textbf{2006}, \textit{125}, 194101.
+
+\bibitem{sun2013strongly}
+Sun, J.; Ruzsinszky, A.; Perdew, J. P. \textit{Phys. Rev. Lett.} \textbf{2015}, \textit{115}, 036402.
+
+\bibitem{sun2015accurate}
+Sun, J.; Remsing, R. C.; Zhang, Y.; Sun, Z.; Ruzsinszky, A.; Peng, H.; Yang, Z.; Paul, A.; Waghmare, U.; Wu, X.; Klein, M. L.; Perdew, J. P. \textit{Nat. Chem.} \textbf{2016}, \textit{8}, 831--836.
+
+\bibitem{peverati2011improving}
+Peverati, R.; Truhlar, D. G. \textit{J. Phys. Chem. Lett.} \textbf{2011}, \textit{2}, 2810--2817.
+
+\bibitem{zhao2005design}
+Zhao, Y.; Truhlar, D. G. \textit{J. Chem. Theory Comput.} \textbf{2005}, \textit{1}, 415--432.
+
+\bibitem{perdew2009workhorse}
+Perdew, J. P.; Ruzsinszky, A.; Csonka, G. I.; Constantin, L. A.; Sun, J. \textit{Phys. Rev. Lett.} \textbf{2009}, \textit{103}, 026403.
+
+\bibitem{wellendorff2012density}
+Wellendorff, J.; Lundgaard, K. T.; M{\o}gelhoj, A.; Petzold, V.; Landis, D. D.; N{\o}rskov, J. K.; Bligaard, T.; Jacobsen, K. W. \textit{Phys. Rev. B} \textbf{2012}, \textit{85}, 235149.
+
+\bibitem{becke1993density}
+Becke, A. D. \textit{J. Chem. Phys.} \textbf{1993}, \textit{98}, 5648--5652.
+
+\bibitem{yanai2004new}
+Yanai, T.; Tew, D. P.; Handy, N. C. \textit{Chem. Phys. Lett.} \textbf{2004}, \textit{393}, 51--57.
+
+\bibitem{vydrov2006assessment}
+Vydrov, O. A.; Scuseria, G. E. \textit{J. Chem. Phys.} \textbf{2006}, \textit{125}, 234109.
+
+\bibitem{heyd2003hybrid}
+Heyd, J.; Scuseria, G. E.; Ernzerhof, M. \textit{J. Chem. Phys.} \textbf{2003}, \textit{118}, 8207--8215.
+
+\bibitem{maurer2016advances}
+Maurer, R. J.; Ruiz, V. G.; Tkatchenko, A. \textit{J. Chem. Phys.} \textbf{2015}, \textit{143}, 102808.
+
+\bibitem{lehtola2014perdew}
+Lehtola, S.; J{\'o}nsson, H. \textit{J. Chem. Theory Comput.} \textbf{2014}, \textit{10}, 5324--5337.
+
+\bibitem{lehtola2016molecules}
+Lehtola, S.; J{\'o}nsson, H. \textit{J. Chem. Theory Comput.} \textbf{2015}, \textit{11}, 5132--5143.
+
+\bibitem{cohen2008fractional}
+Cohen, A. J.; Mori-S{\'a}nchez, P.; Yang, W. \textit{Science} \textbf{2008}, \textit{321}, 792--794.
+
+\bibitem{kaduk2012constrained}
+Kaduk, B.; Kowalczyk, T.; Van Voorhis, T. \textit{Chem. Rev.} \textbf{2012}, \textit{112}, 321--370.
+
+\bibitem{kulik2016perspective}
+Kulik, H. J. \textit{J. Chem. Phys.} \textbf{2015}, \textit{142}, 240901.
+
+\bibitem{curtiss1997assessment}
+Curtiss, L. A.; Raghavachari, K.; Redfern, P. C.; Pople, J. A. \textit{J. Chem. Phys.} \textbf{1997}, \textit{106}, 1063--1079.
+
+\bibitem{curtiss2000assessment}
+Curtiss, L. A.; Raghavachari, K.; Redfern, P. C.; Rassolov, V.; Pople, J. A. \textit{J. Chem. Phys.} \textbf{1998}, \textit{109}, 7764--7776.
+
+\bibitem{karton2011w4}
+Karton, A.; Daon, S.; Martin, J. M. L. \textit{Chem. Phys. Lett.} \textbf{2011}, \textit{510}, 165--178.
+
+\bibitem{gruzman2009performance}
+Gruzman, D.; Karton, A.; Martin, J. M. L. \textit{J. Phys. Chem. A} \textbf{2009}, \textit{113}, 11974--11983.
+
+\bibitem{jurecka2006benchmark}
+Jure{\v{c}}ka, P.; {\v{S}}poner, J.; {\v{C}}ern{\'y}, J.; Hobza, P. \textit{Phys. Chem. Chem. Phys.} \textbf{2006}, \textit{8}, 1985--1993.
+
+\bibitem{rezac2011s66}
+{\v{R}}ez{\'a}{\v{c}}, J.; Riley, K. E.; Hobza, P. \textit{J. Chem. Theory Comput.} \textbf{2011}, \textit{7}, 2427--2438.
+
+\bibitem{jain2013commentary}
+Jain, A.; Ong, S. P.; Hautier, G.; Chen, W.; Richards, W. D.; Dacek, S.; Cholia, S.; Gunter, D.; Skinner, D.; Ceder, G.; Persson, K. A. \textit{APL Mater.} \textbf{2013}, \textit{1}, 011002.
+
+\bibitem{johnson2016nist}
+Johnson III, R. D. \textit{NIST Computational Chemistry Comparison and Benchmark Database, NIST Standard Reference Database Number 101} Release 21, August 2020.
+
+\bibitem{schimka2010accurate}
+Schimka, L.; Harl, J.; Stroppa, A.; Gr{\"u}neis, A.; Marsman, M.; Mittendorfer, F.; Kresse, G. \textit{Nat. Mater.} \textbf{2010}, \textit{9}, 741--744.
+
+\bibitem{ma2015exact}
+Ma, J.; Michaelides, A.; Alf{\`e}, D.; Schimka, L.; Kresse, G.; Wang, E. \textit{Phys. Rev. B} \textbf{2011}, \textit{84}, 033402.
+
+\bibitem{snyder2012finding}
+Snyder, J. C.; Rupp, M.; Hansen, K.; M{\"u}ller, K.-R.; Burke, K. \textit{Phys. Rev. Lett.} \textbf{2012}, \textit{108}, 253002.
+
+\bibitem{nagai2020completing}
+Nagai, R.; Akashi, R.; Sasaki, S.; Tsuneyuki, S. \textit{npj Comput. Mater.} \textbf{2020}, \textit{6}, 43.
+
+\bibitem{chen2020deepks}
+Chen, Y.; Zhang, L.; Wang, H.; E, W. \textit{Nat. Commun.} \textbf{2022}, \textit{13}, 1044.
+
+\bibitem{ramakrishnan2015big}
+Ramakrishnan, R.; Dral, P. O.; Rupp, M.; von Lilienfeld, O. A. \textit{J. Chem. Theory Comput.} \textbf{2015}, \textit{11}, 2087--2096.
+
+\bibitem{unke2019physnet}
+Unke, O. T.; Meuwly, M. \textit{J. Chem. Theory Comput.} \textbf{2019}, \textit{15}, 3678--3693.
+
+\bibitem{gasteiger2020directional}
+Gasteiger, J.; Gro{\ss}, J.; G{\"u}nnemann, S. Directional Message Passing for Molecular Graphs. \textit{International Conference on Learning Representations} \textbf{2020}.
+
+\bibitem{schutt2019unifying}
+Sch{\"u}tt, K. T.; Sauceda, H. E.; Kindermans, P.-J.; Tkatchenko, A.; M{\"u}ller, K.-R. \textit{J. Chem. Phys.} \textbf{2018}, \textit{148}, 241722.
+
+\bibitem{caldeweyher2017extension}
+Caldeweyher, E.; Bannwarth, C.; Grimme, S. \textit{J. Chem. Phys.} \textbf{2017}, \textit{147}, 034112.
+
+\bibitem{grimme2010consistent}
+Grimme, S.; Antony, J.; Ehrlich, S.; Krieg, H. \textit{J. Chem. Phys.} \textbf{2010}, \textit{132}, 154104.
+
+\bibitem{perdew1996generalized}
+Perdew, J. P.; Burke, K.; Ernzerhof, M. \textit{Phys. Rev. Lett.} \textbf{1996}, \textit{77}, 3865.
+
+\bibitem{stephens1994ab}
+Stephens, P. J.; Devlin, F. J.; Chabalowski, C. F.; Frisch, M. J. \textit{J. Phys. Chem.} \textbf{1994}, \textit{98}, 11623--11627.
+
+\bibitem{blochl1994projector}
+Bl{\"o}chl, P. E. \textit{Phys. Rev. B} \textbf{1994}, \textit{50}, 17953.
+
+\bibitem{kresse1999ultrasoft}
+Kresse, G.; Joubert, D. \textit{Phys. Rev. B} \textbf{1999}, \textit{59}, 1758.
+
+\end{thebibliography}
+
+\end{document}
