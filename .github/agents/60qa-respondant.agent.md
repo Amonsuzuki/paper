@@ -14,4 +14,5 @@ At first, you will be given title of the paper. Find it from /latex, and respond
 - The response format is below.
     - Question 1
       - response paragraph (in 200 words)
+      - source (where the answer is written)
       - technical terms explanation (bullet points)
