@@ -7,15 +7,15 @@ This directory contains custom agent configurations for GitHub Copilot. These ag
 ### Worker Agents
 These agents perform specific tasks:
 
-1. **60qa-respondant** - Answers questions about research papers based on the 60qa methodology
-2. **latex_maker** - Converts PDF papers to LaTeX format
-3. **question-respondant** - Answers general questions about papers
+1. **60QA respondant** - Answers questions about research papers based on the 60qa methodology
+2. **latex maker** - Converts PDF papers to LaTeX format
+3. **question respondant** - Answers general questions about papers
 
 ### Master Agents (Orchestrators)
 These agents coordinate worker agents to complete complex workflows:
 
-1. **master-60qa-respondant** - Orchestrates the complete 60qa process by invoking `60qa-respondant` three times (for questions 1-20, 21-40, and 41-60)
-2. **master-latex-maker** - Coordinates conversion of multiple PDF files by invoking `latex_maker` for each unconverted PDF
+1. **master 60qa respondant** - Orchestrates the complete 60qa process by invoking `60QA respondant` three times (for questions 1-20, 21-40, and 41-60)
+2. **master latex maker** - Coordinates conversion of multiple PDF files by invoking `latex maker` for each unconverted PDF
 
 ## How Master Agents Invoke Other Agents
 
@@ -62,28 +62,28 @@ Detailed instructions for the worker agent including:
 
 ## Usage Examples
 
-### Using master-60qa-respondant
+### Using master 60qa respondant
 ```
-@copilot Use the master-60qa-respondant agent to complete the 60qa analysis for "Paper Title"
+@copilot Use the "master 60qa respondant" agent to complete the 60qa analysis for "Paper Title"
 ```
 
 The master agent will:
-1. Invoke 60qa-respondant for questions 1-20
+1. Invoke "60QA respondant" for questions 1-20
 2. Wait for completion
-3. Invoke 60qa-respondant for questions 21-40
+3. Invoke "60QA respondant" for questions 21-40
 4. Wait for completion
-5. Invoke 60qa-respondant for questions 41-60
+5. Invoke "60QA respondant" for questions 41-60
 6. Report final status
 
-### Using master-latex-maker
+### Using master latex maker
 ```
-@copilot Use the master-latex-maker agent to convert all PDFs to LaTeX
+@copilot Use the "master latex maker" agent to convert all PDFs to LaTeX
 ```
 
 The master agent will:
 1. Scan the pdf/ directory
 2. Identify unconverted PDFs
-3. Invoke latex_maker for each PDF
+3. Invoke "latex maker" for each PDF
 4. Verify each conversion
 5. Report summary of conversions
 
