@@ -346,12 +346,17 @@ For large image files (>1 MB), consider using Git LFS:
 # Install Git LFS
 git lfs install
 
-# Track large image files
+# Track large image files (creates/updates .gitattributes)
 git lfs track "*.png"
 git lfs track "*.jpg"
 
-# Add .gitattributes
+# This creates a .gitattributes file with content like:
+# *.png filter=lfs diff=lfs merge=lfs -text
+# *.jpg filter=lfs diff=lfs merge=lfs -text
+
+# Add the .gitattributes file to version control
 git add .gitattributes
+git commit -m "Configure Git LFS for images"
 ```
 
 ---

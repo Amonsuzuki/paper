@@ -28,9 +28,9 @@ convert -density 300 equation.pdf equation.png
 ```
 
 ### From Online Tools
-- [LaTeX Equation Editor](https://latex.codecogs.com/eqneditor/editor.php)
-- [Overleaf](https://www.overleaf.com/)
-- Take screenshots with proper DPI
+- [LaTeX Equation Editor](https://latex.codecogs.com/eqneditor/editor.php) - Interactive tool to create and render LaTeX equations
+- [Overleaf](https://www.overleaf.com/) - Online LaTeX editor with real-time preview
+- Take screenshots with proper DPI (300+ recommended)
 
 ## Note
 

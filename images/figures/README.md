@@ -15,12 +15,18 @@ Use descriptive names with hyphens:
 
 ### Example Usage in Markdown
 
+From a markdown file in the repository root:
 ```markdown
 <p align="center">
-  <img src="../images/figures/your-figure.png" alt="Description" width="600">
+  <img src="images/figures/your-figure.png" alt="Description" width="600">
   <br>
   <em>Figure 1: Caption describing your figure</em>
 </p>
+```
+
+From within the same directory:
+```markdown
+![Your Figure](./your-figure.png)
 ```
 
 ## Tips
