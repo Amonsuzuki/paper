@@ -1,0 +1,74 @@
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.nav
+*.snm
+*.vrb
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+*.egg-info/
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+
+# Large binary files (consider using Git LFS)
+# Uncomment if you want to ignore large images
+# *.png
+# *.jpg
+# *.jpeg
+# images/**/*.png
+# images/**/*.jpg
+
+# Build directories
+build/
+dist/
+*.pdf.aux
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Node modules (if using any JS tools)
+node_modules/
+
+# R files
+.Rhistory
+.RData
+.Rproj.user
