@@ -60,6 +60,15 @@ class GWCalculator:
         """
         Run self-consistent GW calculation.
         
+        Algorithm:
+        1. Initialize with Hartree-Fock orbitals
+        2. Calculate Green's function G⁰
+        3. Calculate polarization P and screened interaction W
+        4. Calculate self-energy Σ = iGW
+        5. Update Green's function from Dyson equation
+        6. Check convergence |Σ_new - Σ_old| < tolerance
+        7. Repeat steps 3-6 until converged
+        
         Args:
             max_iter: Maximum number of iterations
             tolerance: Convergence tolerance
@@ -69,16 +78,13 @@ class GWCalculator:
             - qp_energies: Quasi-particle energies
             - converged: Whether calculation converged
             - iterations: Number of iterations performed
-        """
-        # TODO: Implement self-consistent GW loop
-        # 1. Initialize with HF orbitals
-        # 2. Calculate G⁰
-        # 3. Calculate W
-        # 4. Calculate Σ = iGW  
-        # 5. Update G from Dyson equation
-        # 6. Check convergence
-        # 7. Repeat until converged
         
+        TODO: Implement self-consistent loop following algorithm above
+        - Use self.green_function.calculate_green_function_frequency()
+        - Use self.screened_interaction.calculate_screened_interaction()
+        - Use self.self_energy.calculate_self_energy()
+        - Check convergence and update
+        """
         raise NotImplementedError("Self-consistent GW not yet implemented")
     
     def run_g0w0(self) -> Dict[str, Any]:

@@ -122,3 +122,11 @@ if __name__ == "__main__":
     print(f"Number of qubits: {wf.n_qubits}")
     print(f"Number of parameters: {wf.get_num_parameters()}")
     print(f"Circuit depth: {wf.circuit.depth()}")
+    print(f"Circuit:\n{wf.circuit}")
+    
+    # Test parameter binding
+    import numpy as np
+    test_params = np.random.random(wf.get_num_parameters())
+    bound_circuit = wf.bind_parameters(test_params)
+    print(f"\nBound circuit depth: {bound_circuit.depth()}")
+    print("✓ Wavefunction module working")

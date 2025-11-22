@@ -75,12 +75,15 @@ class VQMCEngine:
         Run variational quantum Monte Carlo optimization.
         
         Algorithm:
-        1. Initialize parameters randomly
-        2. Prepare quantum state |ψ(θ)⟩
-        3. Sample measurements
-        4. Estimate energy E = ⟨ψ(θ)|H|ψ(θ)⟩
-        5. Update parameters to minimize E
-        6. Repeat until convergence
+        1. Initialize parameters randomly or from HF
+        2. For each iteration:
+           a. Prepare quantum state |ψ(θ)⟩ using self.wavefunction
+           b. Sample measurements using self.sampler
+           c. Estimate energy E = ⟨ψ(θ)|H|ψ(θ)⟩ and standard deviation
+           d. Compute gradient ∇_θE (using parameter shift or finite difference)
+           e. Update parameters θ ← θ - learning_rate * ∇_θE
+           f. Check convergence: |E_new - E_old| < tolerance
+        3. Return optimized energy and parameters
         
         Args:
             n_samples: Number of samples per iteration
@@ -89,8 +92,13 @@ class VQMCEngine:
             
         Returns:
             VQMCResult with optimized energy and parameters
+            
+        TODO: Implement VQMC optimization loop following algorithm above
+        - Use self.estimate_energy() for energy estimation
+        - Implement gradient calculation (parameter shift rule)
+        - Use optimizer (Adam, SPSA, or gradient descent)
+        - Track convergence history
         """
-        # TODO: Implement VQMC optimization loop
         raise NotImplementedError("VQMC optimization not yet implemented")
     
     def estimate_energy(

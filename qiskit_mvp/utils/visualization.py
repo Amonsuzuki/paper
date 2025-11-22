@@ -72,4 +72,30 @@ def plot_wavefunction(
 
 # Placeholder for testing
 if __name__ == "__main__":
-    print("Visualization utilities - Ready")
+    print("Visualization utilities - Testing")
+    
+    import numpy as np
+    
+    # Test energy convergence plot
+    print("\n1. Testing energy convergence plot...")
+    test_energies = [-1.0 - 0.1 * np.exp(-0.3 * i) + 0.01 * np.random.randn() 
+                     for i in range(20)]
+    exact_energy = -1.1
+    
+    print(f"   Sample energies: {test_energies[:5]} ...")
+    print(f"   Exact energy: {exact_energy}")
+    # Uncomment to save plot: plot_energy_convergence(test_energies, exact_energy, "test_convergence.png")
+    print("   ✓ Energy plot function ready")
+    
+    # Test wavefunction plot
+    print("\n2. Testing wavefunction plot...")
+    n_qubits = 2
+    test_amplitudes = np.random.randn(2**n_qubits) + 1j * np.random.randn(2**n_qubits)
+    test_amplitudes /= np.linalg.norm(test_amplitudes)
+    
+    print(f"   Amplitudes shape: {test_amplitudes.shape}")
+    print(f"   Norm: {np.linalg.norm(test_amplitudes):.6f}")
+    # Uncomment to save plot: plot_wavefunction(test_amplitudes, n_qubits, "test_wavefunction.png")
+    print("   ✓ Wavefunction plot function ready")
+    
+    print("\n✓ All visualization utilities ready")

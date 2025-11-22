@@ -221,12 +221,30 @@ def get_reference_energy(
     """
     Get reference energy from classical calculation.
     
+    This function will use PySCF to compute reference energies for comparison.
+    
     Args:
-        problem: ElectronicStructureProblem object
-        method: Method to use ("hf", "fci", "ccsd")
+        problem: ElectronicStructureProblem object from Qiskit Nature
+        method: Method to use for calculation
+            - "hf": Hartree-Fock (mean-field)
+            - "fci": Full Configuration Interaction (exact for small systems)
+            - "ccsd": Coupled Cluster Singles and Doubles
+            - "ccsd(t)": CCSD with perturbative triples
         
     Returns:
         Reference energy in Hartree
+        
+    Example:
+        >>> from qiskit_nature.second_q.drivers import PySCFDriver
+        >>> driver = PySCFDriver(atom="H 0 0 0; H 0 0 0.735", basis="sto-3g")
+        >>> problem = driver.run()
+        >>> fci_energy = get_reference_energy(problem, method="fci")
+        >>> print(f"FCI energy: {fci_energy:.6f} Ha")
+    
+    TODO: Implement using PySCF's built-in methods:
+        - HF: problem.get_hartree_fock_energy() or use pyscf.scf.RHF
+        - FCI: Use pyscf.fci.FCI
+        - CCSD: Use pyscf.cc.CCSD
     """
     # This would use PySCF to get reference energies
     # Placeholder for now
