@@ -6,6 +6,7 @@
 
 name: latex maker
 description: convert pdf paper file to latex format.
+tools: ['shell', 'read', 'edit', 'search', 'web']
 ---
 
 # My Agent
