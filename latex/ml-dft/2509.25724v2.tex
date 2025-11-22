@@ -1,0 +1,805 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{natbib}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{url}
+\geometry{margin=1in}
+
+\title{Towards A Universally Transferable Acceleration Method for Density Functional Theory}
+\author{Zhe Liu; Yuyan Ni; Zhichen Pu; Qiming Sun; Siyuan Liu; Wen Yan}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Recently, sophisticated deep learning-based approaches have been developed for generating efficient
+initial guesses to accelerate the convergence of density functional theory (DFT) calculations. While
+the actual initial guesses are often density matrices (DM), quantities that can convert into density
+matrices also qualify as alternative forms of initial guesses. Hence, existing works mostly rely
+on the prediction of the Hamiltonian matrix for obtaining high-quality initial guesses. However,
+the Hamiltonian matrix is both numerically difficult to predict and intrinsically non-transferable,
+hindering the application of such models in real scenarios. In light of this, we propose a method
+that constructs DFT initial guesses by predicting the electron density in a compact auxiliary basis
+representation using E(3)-equivariant neural networks. Trained on small molecules with up to 20
+atoms, our model is able to achieve an average 33.3\% self-consistent field (SCF) step reduction
+on systems up to 60 atoms, substantially outperforming Hamiltonian-centric and DM-centric
+models. Critically, this acceleration remains nearly constant with increasing system sizes and
+exhibits strong transferring behaviors across orbital basis sets and exchange–correlation (XC)
+functionals. To the best of our knowledge, this work represents the first and robust candidate for
+a universally transferable DFT acceleration method. We are also releasing the SCFbench dataset
+and its accompanying code to facilitate future research in this promising direction.
+Correspondence:Qiming Sun at qiming.sun@bytedance.com , Siyuan Liu at siyuan.liu@bytedance.com
+Project Page:The code and dataset will be released soon.
+10 15 200.51.01.52.02.53.0
+in-distributionin-distribution
+26 30 40 50 60
+out-of-distributionout-of-distribution
+Number of AtomsRelative Iteration Count (RIC)RIC=Stepsw/PredictedInitialGuess
+Stepsw/DefaultInitialGuess
+(lower is better)
+Slowdown
+Speedup [ours]
+H
+D
+Figure 1Comparison of deep learning-based DFT acceleration methods with different initial guess targets. The main
+metric, Relative Iteration Count (RIC), measures the ratio of SCF iterations required with a deep learning initial
+guess relative to a baseline. A smaller RIC means fewer SCF iterations required for convergence and is therefore
+preferable. While the three models perform similarly on in-distribution (ID) systems, on out-of-distribution (OOD)
+systems, our proposed method with electron density ( ρ) as the target performs significantly better than methods based
+on Hamiltonian ( H) or density matrix ( D). More crucially, it shows a nearly constant scaling with increasing system
+size, which is an ideal property for the task of DFT acceleration.
+1arXiv:2509.25724v2 [physics.chem-ph] 15 Oct 2025
+\end{abstract}
+
+\section{Introduction
+Density Functional Theory (DFT) [ 14,19,28] is a cornerstone of computational chemistry, offering a powerful
+framework for predicting the electronic structure and properties of molecules. The most widely applied
+algorithm for solving the DFT problem is the self-consistent field (SCF) method, an iterative process that
+refines an initial guess for the density matrix until a converged solution is found. However, the iterative nature
+of SCF can be computationally expensive, particularly for large systems, creating a significant bottleneck in
+chemical discovery.
+Machine learning (ML) offers a promising path to accelerate these calculations by providing a high-quality
+initial guess for the SCF procedure, as illustrated in Figure 2. A popular approach is to train models to
+predict the Hamiltonian matrix [ 25,44,45]. However, this strategy faces critical limitations, particularly for
+the large molecules where acceleration is most needed. The poor performance stems from two distinct reasons.
+First, even when trained on datasets containing large molecules, the approach is hampered by numerical
+instability: small prediction errors in individual Hamiltonian matrix elements can be magnified into large,
+physically nonsensical errors for the system as a whole [ 25]. Second, and more critically, the approach fails to
+scale to molecules larger than those seen during training.
+This lack of transferability is rooted in a funda-
+mental limitation of the theory itself: the core
+ansatz of Kohn-Sham DFT is that a real system
+of interacting electrons can be represented by a
+fictitious, non-interacting system that shares the
+exact same electron density [ 19]. This makes the
+electron density the fundamental physical observ-
+able, rather than the Hamiltonian matrix. A key
+consequence is that the electron density associ-
+atedwithaspecificchemicalenvironmentishighly
+transferable. The Hamiltonian matrix, however,
+does not share this property; it contains matrix
+elements for every pair of atoms in a molecule,
+regardless of the distance separating them, mak-
+ing its prediction sensitive to the molecule’s entire
+global structure. This makes the Hamiltonian a
+difficult target for extrapolating to larger, more
+complex chemical environments.
+Figure 2Top left: The Hamiltonian ( H), density
+matrix ( D), and electron density ( ρ) are interdepen-
+dent, so any of them can serve as an initial guess. Top
+center: An SCF loop iteratively finds the ground state
+from the given initial guess. Bottom: An ML model
+predicts an initial guess from a molecular structure
+to accelerate the SCF loop.
+As an alternative, predicting density matrices for generating DFT initial guesses has been proposed [ 7,13,34].
+However, this strategy is strongly basis-set dependent. In particular, when diffuse functions are included,
+density matrix elements span a much larger numerical range, amplifying numerical uncertainties.
+We argue that a more fundamental and transferable target for prediction is the electron density itself. Previous
+works have attempted to predict the electron density on real-space grids [ 3]. However, such grid-based
+predictions are not directly suitable for constructing an SCF initial guess, as most DFT functionals require
+not only the density but also its gradients, which are not readily available from grid-based predictions alone.
+Furthermore, even when similar ideas were proposed [ 9,12], a practical method for using the predicted density
+to accelerate DFT calculations was never fully realized.
+We propose a new paradigm that overcomes these limitations. We train a model to predict the expansion
+coefficients of the electron density in a compact auxiliary basis and, crucially, demonstrate how to use
+this prediction to construct a transferable initial guess for the SCF process. Our most significant finding
+is that the electron density is a highly transferable and scalable property. The model we present can be
+extended to molecules that contain significantly more atoms than those in the training set. On benchmark
+tests involving all system sizes, our method achieves an substantial improvement over the Hamiltonian- and
+density-matrix-based approaches (illustrated in Figure 1).
+This electron-density-centric approach offers several additional advantages. First, from a practical standpoint,
+2
+
+processing density coefficients is significantly more efficient. The number of coefficients in an auxiliary basis
+scales linearly with system size, whereas the Hamiltonian and density matrices scale quadratically. Second,
+the electron density can possess lower symmetry ( L) than the Hamiltonian, which is particularly beneficial
+for equivariant neural networks where the computational complexity of the tensor product scales as O(L6).
+Finally, the local nature of electron density makes our approach highly data-efficient, requiring a smaller
+training set to achieve high accuracy.
+To facilitate further research in this direction, we introduce a new dataset SCFbench containing the electron
+densities of molecules composed of up to seven different elements. We provide benchmark results for two
+prominent ML architectures, demonstrating how our electron density prediction task can be seamlessly
+integrated into existing models to accelerate quantum chemical calculations.
+The main contributions of this work can be summarized as follows:
+•We propose a new paradigm for DFT acceleration that targets the electron density—a more fundamental,
+local, and data-efficient quantity—to provide a high-quality initial guess for SCF calculations. Specifically,
+we take the efforts to implement the procedure for converting the electron density into an initial guess,
+the absence of which was the direct cause of the under-development of this principled paradigm.
+•We introduce SCFbench, the first public dataset of electron density coefficients specifically designed for
+developing and benchmarking DFT acceleration methods.
+•We systematically benchmark our electron-density-centric approach for both in-domain and transferring
+settings on SCFbench. Results indicate that our approach shows remarkable transferability not only to
+larger molecules but also across different exchange-correlation (XC) functionals and orbital basis sets.}
+
+\section{Background}
+
+2.1 Kohn-Sham DFT and the Self-Consistent Field Method
+Kohn-Sham (KS) DFT provides a systematic framework to construct the energy functional E[ρ(r)]of a system
+based on its electron density [ 28]. The electron density ρ(r)in KS-DFT is constructed from the density
+matrixDand a set of basis functions\{ϕ µ(r)\}:
+ρ(r) =X
+µ,νDµνϕµ(r)ϕ ν(r).(1)
+The density matrix is derived from the molecular orbital coefficientsC
+Dµν=X
+iCµiCνi.(2)
+Minimization the total energy with respect to the orbital coefficients leads to a generalized eigenvalue equation:
+H[ρ]C=SCϵ.(3)
+Here,Sis the overlap matrix for the non-orthogonal basis functions, and ϵis the diagonal matrix of orbital
+energies. The Kohn-Sham Hamiltonian matrix His an effective single-particle Hamiltonian. His composed
+of three distinct terms:
+H=H core+J+V xc.(4)
+The core Hamiltonian (H core) is determined solely by the molecular geometry and basis set. The remaining
+terms capture the electronic interactions: the Coulomb matrix ( J) for classical electron repulsion and the XC
+matrix (V xc) for quantum mechanical effects.
+A significant computational challenge arises from the fact that both JandVxcdepend on the density matrix
+D, which in turn is constructed from the orbital coefficients C. This interdependence necessitates an iterative
+procedure known as the SCF method [ 36]. One common approach to solving the SCF problem is to begin
+with an initial guess for the density matrix, D. From D, an initial Hamiltonian His constructed. Solving
+3
+
+the eigenvalue problem yields new orbital coefficients C′, which are used to compute an updated density
+matrix, D′. This cycle, D→H→C′→D′, is repeated until the density matrix converges and the solution
+is deemed self-consistent. A common strategy for this initial guess, such as the default minaomethod in
+PySCF [35], is the superposition of atomic densities (SAD) [23, 39].
+2.2 Constructing the Kohn-Sham Matrix from Predicted Density
+The key insight for our work lies in how the electronic terms are constructed from the predicted electron
+density.
+Using the density fitting [ 4] approximation, the electron density ρ(r)can be expanded in terms of an auxiliary
+basis set\{χ k(r)\}with the expansion coefficientsc k:
+ρ(r)≈˜ρ(r) =X
+kckχk(r).(5)
+These auxiliary basis functions are atom-centered. Typical auxiliary basis sets include def2-universal-jfit [ 42]
+and the even-tempered basis (ETB) [ 1], parameterized by β. A smaller βyields a larger ETB basis. The size
+of the auxiliary functions is typically three to five times that of the atomic orbital basis functions, which is
+significantly smaller than the number of orbital pairs in HandD. In our approach, the auxiliary coefficients
+ckare the primary quantities predicted using a machine learning model.
+With the auxiliary basis expansion, both the electron density and its gradient can be directly evaluated. This
+allows us to efficiently evaluate the XC matrix for generalized gradient approximation (GGA) functionals.
+Additionally, the Coulomb matrix J, while formally dependent on the density matrix D, can be computed
+efficiently from the coefficients\{c k\}using the density fitting approximation.
+This feature makes the GGA framework particularly well-suited for our approach, as a machine learning
+prediction of the density coefficients \{ck\}is sufficient to assemble the entire Kohn-Sham Hamiltonian matrix
+H. With additional approximations, extensions to more complex functional types are possible. Explicit
+formulas for constructing JandVxcfor general XC functionals from the auxiliary density are provided in
+Appendix C.
+Compared to computing Hdirectly from the full density matrix D, our approach introduces an approximation
+toJandVxcvia the fitted density ˜ρ(r). However, The error in this approximation can be systematically
+reduced by increasing the number of auxiliary basis functions used in the expansion (see Appendix A for an
+illustrative example).
+2.3 Equivariant Neural Networks
+Physical properties of molecular systems are inherently independent of the choice of coordinate system. Under
+spatial transformations such as rotations, translations, or reflections, quantities like energy and electron
+density should transform accordingly, preserving their physical meaning. E(3)-equivariant neural networks
+are specifically designed to respect these symmetries, where E(3) denotes the Euclidean group of all such
+transformations [11, 20].
+Formally, an equivariant modelΦsatisfies the following property: when the input atomic coordinates \{ri\}are
+transformed by an operation g∈E (3), the output Otransforms according to a corresponding representation
+D(g),
+Φ(g· \{r i\}) =D(g)Φ(\{r i\})(6)
+Here, D(g)is the appropriate representation for the output type. For scalar quantities such as total energy,
+D(g)is the identity, reflecting invariance under transformation. For tensorial properties, such as electron
+density coefficients in a spherical harmonics basis, D(g)corresponds to the Wigner D-matrix, which encodes the
+rotation of these higher-order objects. Incorporating such symmetry constraints into the network architecture
+via tensor product operations provides a strong inductive bias, improving generalization and data efficiency
+for molecular property prediction.
+4
+
+\section{Related Work}
+
+3.1 Hamiltonian Prediction
+RecentworkshavedevelopedneuralnetworksfordirectpredictionoftheKohn-ShamHamiltonian. PhiSNet[ 38]
+uses SE(3)-equivariant layers to reconstruct molecular wavefunctions and densities. QHNet [ 44] introduces
+an efficient SE(3)-equivariant graph network for Hamiltonian prediction with reduced tensor operations.
+SPHNet [ 26] incorporates adaptive sparsity into equivariant networks. QHFlow [ 18] employs high-order
+equivariant flow matching to generate Hamiltonians conditioned on molecular geometry. The most scalable
+Hamiltonian model to date is proposed by Li et al. [25], which introduces the Wavefunction Alignment Loss
+(WALoss) to enable Hamiltonian prediction for large molecules and significantly improve the derived energy
+compared to previous Hamiltonian models. However, its accuracy for energy prediction remains much lower
+than that of direct energy models.
+Other related Hamiltonian prediction works include Li et al. [24], Tang et al. [37], Zhang et al. [47].
+3.2 Density Matrix Prediction
+Recent studies have begun to explore direct prediction of the density matrix. The works of Shao et al. [34]
+and Hazra et al. [13]applied kernel-based methods. In contrast, Febrer et al. [7]utilized an equivariant neural
+network, focusing on small molecules with a small numerical atomic orbitals basis set. While these approaches
+have advanced the field, density matrix prediction still faces challenges with transferability and scalability:
+the density matrix elements are highly sensitive to the choice of basis set, which can limit generalization
+across chemical systems.
+3.3 Electron Density Prediction
+ML prediction of electron density has been widely studied [ 3,5,6,8,15,22,31,41]. Early efforts typically
+represented the density on real-space grids, which introduced redundancy and high computational cost. In
+contrast, representing the density with one-center auxiliary functions provides a more efficient representation
+while maintaining good accuracy [ 12]. Fu et al. [9]introduced an accurate and efficient model, SCDP, for
+predicting electron density on real-space grids using even-tempered Gaussian functions as auxiliary basis sets,
+augmented with off-center virtual orbitals. However, due to the common lack of support of using electron
+density as an initial guess in quantum chemistry software, none of these works have explored how the predicted
+density could be leveraged to accelerate DFT calculations.
+3.4 Public Hamiltonian Datasets
+Several publicly available datasets provide Hamiltonian matrices for molecular systems and are closely related
+to this work. MD17 [ 33] contains Hamiltonians for thousands of structures of four small molecules, computed
+with the def2-SVP basis set and PBE functional. QH9 [ 45] extends the QM9 [ 32] dataset with over 130,000
+stable geometries and molecular dynamics trajectories, providing precise Hamiltonians and open-source
+benchmarks for model development. The nablaDFT [ 16] and its extension, ∇2DFT [17], offer a large collection
+of drug-like molecules with millions of conformations and associated quantum chemistry properties, including
+Hamiltonians and geometry optimization trajectories. Other related datasets include QCML [ 10], which uses
+numerical atomic orbitals, and PubChemQH [25], which is not yet publicly released.
+
+\section{The SCFbench Dataset}
+
+To support research on scalable and transferable initial guess methods, we introduce the SCFbench dataset.
+It was constructed by applying a fragmentation procedure, similar to that of Zheng et al. [48], to drug-like
+molecules within the ChEMBL database [ 46]. A subset of fragments containing 20 atoms or less was selected,
+covering the elements H, C, N, O, F, P, and S. SCFbench dataset has several features designed to evaluate
+transferability and scalability.
+In addition to Hamiltonians and density matrices, SCFbench provides electron density expansion coefficients for
+three distinct auxiliary basis sets: the computationally efficient def2-universal-jfit [ 42], and two even-tempered
+5
+
+Figure 3Statistical analysis of the SCFbench dataset. (a) Distribution of molecule sizes, (b) Proportion of molecules
+containing each individual element (H, C, N, O, F, P, S) and element pair present in the dataset, and (c) decomposition
+of electron density into irreducible representations (irreps) over the auxiliary basis sets.
+basis (ETB) sets built from def2-SVP with β= 2.0and β= 1.5[1]. The resulting dataset of 43,862 molecules
+is randomly split into training, validation, and test sets with a ratio of 8:1:1. The test set is used for evaluating
+the in-distribution performance of a model, so it is also called as the in-distribution (ID) test set. This dataset
+is well-suited for the electron density prediction task and is designed to be lightweight and easily extensible.
+A key feature of the dataset is its dedicated out-of-distribution (OOD) test set, designed to address the
+challenge of system size transferability. This set comprises 1,050 molecules, consisting of 30 molecules for
+each atom count from 26 to 60, allowing for the evaluation of models on systems significantly larger than the
+training data. The OOD set also includes the number of SCF cycles required for each molecule.
+The data was generated using the PBE functional [ 29], a pure GGA functional. This choice was made because,
+as discussed in section 2, the Kohn-Sham Hamiltonian for GGA functionals can be constructed directly from
+the electron density coefficients, making it a suitable framework for developing and testing our proposed
+method. It is also worth noting that while SCF convergence is often more challenging for GGA functionals
+than for hybrids [27, 30], they remain underrepresented in existing Hamiltonian datasets.
+For the DFT calculations, we used the def2-SVP basis set [ 43], a [99, 590] atom grid, and an SCF energy
+convergence tolerance of1×10−10.
+
+\section{Methods}
+
+5.1 Evaluation
+The primary goal of our evaluation is to assess the practical value of using ML-predicted electron density
+to accelerate SCF calculations. We evaluate the models on their ability to accelerate SCF convergence for
+molecules both within the training distribution (ID) and for molecules significantly larger than those seen
+during training (OOD). This directly tests the crucial property of size transferability. Furthermore, we assess
+the robustness of the models by testing their transferability across different XC functionals and atomic orbital
+basis sets.
+Our main metric is the Relative Iteration Count (RIC), defined as the number of SCF cycles required for
+convergence using the ML-predicted initial guess, normalized by the number of cycles required using the
+standard SAD initialization ( minao). A lower RIC means greater acceleration. In addition, we define a
+calculation as converged if it reaches the required PySCF default tolerance within 50 iterations. This allows us
+to report a convergence rate, which is a crucial metric for practical usability. For the ID vs. OOD comparison,
+we evaluate on a random 1,000-molecule subset of the test set and the full OOD test set, respectively. While
+wall-clock time depends on implementation and hardware, the number of SCF cycles provides a deterministic
+and hardware-independent measure of an initial guess’s quality. A comprehensive set of additional metrics is
+provided in Appendix E.
+6
+
+5.2 Model Architectures
+Instead of designing a new architecture from the ground up, we adapt two classical models—NequIP [ 2] and
+QHNet [44]—by modifying their final prediction heads.
+NequIPNequIP [ 2] is an E(3)-equivariant graph neural network that represents atomistic systems as graphs.
+Its core operation is a symmetry-preserving convolution where messages, constructed via a tensor product
+of neighbor features and a filter made of learnable radial functions and spherical harmonics, are passed
+between atoms. This process iteratively refines each atom’s features, which are geometric tensors (irreducible
+representations) of varying orders ( l). Originally, NequIP’s architecture concluded with a simple head that
+processed scalar (l= 0) features to predict atomic energies.
+QHNetQHNet [ 44] is an efficient SE(3)-equivariant model designed to predict quantum tensors. Its
+architecture is distinguished by node-wise interaction layers that use an attention-like mechanism and a Norm
+Gate that dynamically rescales higher-order tensor features. QHNet was originally designed with a large,
+multi-stage prediction head that used a Tensor Expansion module to construct the final Hamiltonian matrix
+from pair-wise atomic features.
+Species-dependent Equivariant Prediction HeadWe replace the original prediction heads of both models with
+a single, species-dependent equivariant linear layer. This simple layer directly maps the final node features
+from the backbone to a new output feature, hi
+out, which are the density coefficients containing irreducible
+representations from order l= 0to l= 4. The layer’s weights are conditioned on the atomic species, allowing
+the model to learn a distinct final mapping for each chemical element. For NequIP, this modification has a
+negligible impact on the total parameter count. For QHNet, however, replacing its complex original head
+results in a significant efficiency gain, with the final model retaining only about one-quarter of the original
+parameters (see Table 1).
+5.3 Training Procedure
+All density coefficients models were trained by minimizing a composite loss function, L, calculated per atom.
+This loss is the sum of the mean absolute error (MAE) and the root mean square error (RMSE) of the
+coefficients, averaged over all atoms in the batch:
+L=
+
+\section{AAX}
+
+a=11
+NaNaX
+i=1|ˆca,i−ca,i|!
++vuut1
+AAX
+a=11
+NaNaX
+i=1(ˆca,i−ca,i)2 (7)
+where Ais the total number of atoms, Nais the number of coefficients for atom a, and ˆca,iandca,iare the
+predicted and ground-truth coefficients. Other training details are described in Appendix D.
+
+\section{Experiments}
+
+In this section, we present benchmark results for the SCFbench dataset using the modified NequIP and
+QHNet models, focusing on their performance in accelerating SCF calculations. The results are summarized
+in Table 1 and illustrated in Figure 1.
+6.1 SCF Acceleration with Predicted Density (ID and OOD)
+The Hamiltonian prediction model exhibits significant limitations. While it achieves a low RIC on the in-
+distribution test set (63.20\%), which is comparable to performance reported in other works [ 45], its performance
+collapses on the OOD test set. The relative iteration count increases to 179.47\%. More alarmingly, the model
+suffers from a non-convergence problem, failing to converge for over 2.5\% of the OOD molecules. Unlike
+chemically-grounded methods like SAD, the ML model can produce unphysical initial guesses, especially for
+larger molecules, leading to a failure of the SCF procedure.
+7
+
+Table 1Results on the SCFbench benchmark dataset. The best results for each dataset are highlighted in bold and
+the second bests are underlined. Best settings for each prediction target are marked in gray. Results for an extended
+set of metrics are available in Appendix E.
+Prediction Target Model \# Param.ID Test OOD Test
+Convergence↑RIC↓Convergence↑RIC↓
+HamiltonianGround Truth - 100\% 29.22\% 100\% 26.96\%
+QHNet 20.5M 100\% 63.20\% 97.43\% 179.47\%
+Density MatrixGround Truth - 100\% 27.57\% 100\% 26.62\%
+QHNet 20.5M 100\% 70.45\% 99.71\% 91.69\%
+Density Coefficients
+def2-universal-jfitGround Truth - 100\% 62.80\% 100\% 60.45\%
+QHNet 5.9M 100\% 66.90\% 100\% 73.26\%
+NequIP-S 2.7M 100\% 74.90\% 100\% 89.46\%
+NequIP-M 36.9M 100\% 64.82\% 100\% 69.10\%
+NequIP-L 50.0M 100\% 63.78\% 100\% 66.68\%
+Density Coefficients
+ETB,β= 2.0Ground Truth - 100\% 58.96\% 100\% 55.05\%
+QHNet 5.9M 100\% 68.62\% 100\% 79.36\%
+NequIP-S 2.7M 100\% 82.20\% 100\% 93.28\%
+NequIP-M 36.9M 100\% 67.31\% 100\% 78.39\%
+NequIP-L 50.0M 100\% 62.48\% 100\% 70.42\%
+Density Coefficients
+ETB,β= 1.5Ground Truth - 100\% 43.26\% 100\% 39.66\%
+QHNet 5.9M 100\% 78.05\% 100\% 82.76\%
+NequIP-S 2.7M 100\% 89.80\% 99.24\% 127.16\%
+NequIP-M 36.9M 100\% 76.82\% 99.62\% 108.17\%
+NequIP-L 50.0M 100\% 68.85\% 99.90\% 81.33\%
+Predicting the density matrix offers an improvement over the Hamiltonian but still falls short in transferability.
+It achieves a solid RIC of 70.45\% relative iteration count on the ID set and maintains a high convergence
+rate on the OOD set. However, its performance degrades on larger molecules, with the RIC increasing to
+91.69\% for the OOD set. As illustrated in Figure 1, its performance clearly worsens as system size increases,
+highlighting that the density matrix remains a challenging target for size transferability.
+In stark contrast, our density-based models demonstrate excellent scalability. On the ID test set, the best
+models (NequIP-L) achieve RICs of 62-64\%, nearing the theoretical limit imposed by the ground truth density.
+Critically, this strong performance is maintained on the OOD test set. For the def2-universal-jfit basis, the
+NequIP-L model’s acceleration is remarkably consistent, with an RIC of 63.78\% on the ID set and 66.68\%
+on the OOD set, and it achieves a 100\% convergence rate across all tests. This remarkable consistency
+proves that electron density is a highly transferable property, enabling models trained on small molecules
+to effectively accelerate calculations for much larger ones. Further emphasizing this point, when we task
+the QHNet electron density model with predicting electron density instead of the Hamiltonian matrix, its
+RIC improves dramatically to 73.26\% on the OOD set, highlighting that the choice of a transferable physical
+quantity is more critical than the specific model architecture.
+Analyzing the ground truth results reveals the theoretical limits of this approach. The ground truth
+Hamiltonian and Density Matrix provide the best possible initial guess, requiring only one SCF cycle in theory;
+the remaining 27-29\% RICs are attributed to numerical precision differences. For density coefficients, the
+potential acceleration depends on the expressiveness of the auxiliary basis, with larger bases like ETB ( β= 1.5)
+offering greater potential for acceleration (a theoretical limit of ∼40\%) than the compact def2-universal-jfit
+basis ( ∼60\%). Our ML models come very close to reaching this RIC limit for the def2-universal-jfit basis,
+demonstrating the learnability of the task. The performance gap for the larger ETB basis sets, however,
+highlights a promising avenue for future work. Improved model architectures could potentially capture more
+8
+
+information from these expressive bases, pushing the acceleration even closer to the theoretical limit.
+6.2 Functional and Basis Set Transferability
+Table 2Transferability of NequIP-L model across different functionals and basis sets. The model is trained on
+PBE/def2-SVP and evaluated on various settings. RICs are reported for both ID and OOD sets.
+Functional (Family: Name) Basis Set RIC (ID Test)↓RIC (OOD Test)↓
+In-distribution setting
+GGA: PBE def2-SVP 63.78\% 66.68\%
+Transferring to different XC functionals
+GGA: BLYP
+def2-SVP71.38\% 71.22\%
+meta-GGA: SCAN 88.15\% 86.45\%
+Hybrid GGA: B3LYP5 84.63\% 83.72\%
+Hybrid GGA: PBE0 85.99\% 85.51\%
+Transferring to different atomic orbital basis sets
+GGA: PBEdef2-TZVP 76.68\% 75.24\%
+def2-TZVPPD 77.07\% 75.81\%
+def2-QZVP 77.81\% 75.98\%
+Transferring to different XC functionals AND basis sets
+Hybrid GGA: B3LYP5 def2-TZVP 87.70\% 85.47\%
+A key advantage of targeting electron density is its theoretical independence from the specific XC functional
+and orbital basis set used in a calculation [ 19]. To test this in practice, we evaluate the transferability
+of a single model—the NequIP-L model trained on PBE/def2-SVP with the def2-universal-jfit auxiliary
+basis—across a range of different functionals and larger orbital basis sets. The results, presented in Table 2,
+demonstrate the practical robustness of the density-based approach. While performance moderately degrades
+compared to the original PBE/def2-SVP setting, the model still provides meaningful acceleration, particularly
+for the OOD set, showcasing its utility in diverse computational chemistry workflows.
+Notably, our model achieves an RIC of 85.47\% (OOD) on B3LYP5/def2-TZVP, where B3LYP5 refers to the
+B3LYP hybrid functional [ 21] with the VWN5 correlation component [ 40]—matching the setup used in Li
+et al.[25]. Despite training on a dataset consisting of much smaller molecules and with different functional
+and basis set choices, our density-based approach delivers comparable acceleration performance for molecules
+of similar size. This highlights the strong transferability and data efficiency of electron density prediction,
+even when evaluated under conditions aligned with state-of-the-art Hamiltonian-based models.
+
+\section{Conclusion}
+
+By targeting the electron density, this work provides a practical and reliable solution to the long-standing
+challenge of creating a scalable initial guess for SCF calculations. We have shown that a single model, trained
+on a modest dataset of small molecules, can serve as a “drop-in” accelerator for a wide range of systems,
+including those significantly larger than the training data, and across various functionals and basis sets. The
+robustness of our method marks a steady step towards a universally applicable tool for the computational
+chemistry community.
+To facilitate further progress, we have released the SCFbench dataset, a comprehensive benchmark designed
+to test these crucial aspects of transferability and scalability. Future work can build on this foundation in
+several key directions. While our models approach the theoretical performance limit for compact auxiliary
+basis sets, a gap remains for more expressive bases; developing more powerful neural network architectures
+could close this gap and unlock even greater acceleration. Furthermore, extending the SCFbench dataset
+to include a wider range of the periodic table and periodic systems will be vital for pushing this promising
+method towards true universality.
+
+\section{References}
+
+[1]Richard D. Bardo and Klaus Ruedenberg. Even-tempered atomic orbitals. VI. Optimal orbital exponents and
+optimal contractions of Gaussian primitives for hydrogen, carbon, and oxygen in molecules. TheJournalof
+Chemical Physics, 60(3):918–931, February 1974. ISSN 0021-9606. doi: 10.1063/1.1681168.
+[2]Simon Batzner, Albert Musaelian, Lixin Sun, Mario Geiger, Jonathan P. Mailoa, Mordechai Kornbluth, Nicola
+Molinari, Tess E. Smidt, and Boris Kozinsky. E(3)-equivariant graph neural networks for data-efficient and
+accurate interatomic potentials. NatureCommunications , 13(1):2453, May 2022. ISSN 2041-1723. doi: 10.1038/
+s41467-022-29939-5.
+[3]Felix Brockherde, Leslie Vogt, Li Li, Mark E. Tuckerman, Kieron Burke, and Klaus-Robert Müller. Bypassing the
+kohn-sham equations with machine learning. NatureCommunications , 8(1):872, October 2017. ISSN 2041-1723.
+URLhttps://doi.org/10.1038/s41467-017-00839-3.
+[4]Brett I. Dunlap. Robust and variational fitting. Physical Chemistry Chemical Physics, 2(10):2113–2116, January
+2000. ISSN 1463-9084. doi: 10.1039/B000027M.
+[5]J. A. Ellis, L. Fiedler, G. A. Popoola, N. A. Modine, J. A. Stephens, A. P. Thompson, A. Cangi, and S. Rajaman-
+ickam. Accelerating finite-temperature kohn-sham density functional theory with deep neural networks. Phys.
+Rev.B, 104(3):035120, July 2021. URLhttps://link.aps.org/doi/10.1103/PhysRevB.104.035120.
+[6]Jonas Elsborg, Luca Thiede, Alán Aspuru-Guzik, Tejs Vegge, and Arghya Bhowmik. ELECTRA: A Cartesian
+Network for 3D Charge Density Prediction with Floating Orbitals, May 2025.
+[7]Pol Febrer, Peter Bjørn Jørgensen, Miguel Pruneda, Alberto García, Pablo Ordejón, and Arghya Bhowmik.
+Graph2mat: universal graph to matrix conversion for electron density prediction. Machine Learning: Science
+andTechnology , 6(2):025013, apr 2025. doi: 10.1088/2632-2153/adc871. URL https://dx.doi.org/10.1088/
+2632-2153/adc871.
+[8]Bruno Focassio, Michelangelo Domina, Urvesh Patil, Adalberto Fazzio, and Stefano Sanvito. Linear
+jacobi-legendre expansion of the charge density for machine learning-accelerated electronic structure calcu-
+lations. npjComputational Materials , 9(1):87, May 2023. ISSN 2057-3960. URL https://doi.org/10.1038/
+s41524-023-01053-0.
+[9]Xiang Fu, Andrew Rosen, Kyle Bystrom, Rui Wang, Albert Musaelian, Boris Kozinsky, Tess Smidt, and Tommi
+Jaakkola. A recipe for charge density prediction, 2024. URLhttps://arxiv.org/abs/2405.19276.
+[10]Stefan Ganscha, Oliver T. Unke, Daniel Ahlin, Hartmut Maennel, Sergii Kashubin, and Klaus-Robert Müller.
+The QCML dataset, Quantum chemistry reference data from 33.5M DFT and 14.7B semi-empirical calculations.
+Scientific Data, 12(1):406, March 2025. ISSN 2052-4463. doi: 10.1038/s41597-025-04720-7.
+[11] Mario Geiger and Tess Smidt. E3nn: Euclidean Neural Networks, July 2022.
+[12]Andrea Grisafi, Alberto Fabrizio, Benjamin Meyer, David M. Wilkins, Clemence Corminboeuf, and Michele
+Ceriotti. Transferable machine-learning model of the electron density. ACSCent.Sci., 5(1):57–64, January 2019.
+ISSN 2374-7943. doi: 10.1021/acscentsci.8b00551. URLhttps://doi.org/10.1021/acscentsci.8b00551.
+[13]S. Hazra, U. Patil, and S. Sanvito. Predicting the one-particle density matrix with machine learning. J.
+Chem.TheoryComput. , 20(11):4569–4578, June 2024. ISSN 1549-9618. doi: 10.1021/acs.jctc.4c00042. URL
+https://doi.org/10.1021/acs.jctc.4c00042.
+[14]P. Hohenberg and W. Kohn. Inhomogeneous Electron Gas. Physical Review, 136(3B):B864–B871, November
+1964. ISSN 0031-899X. doi: 10.1103/PhysRev.136.B864.
+[15]Peter Bjørn Jørgensen and Arghya Bhowmik. Equivariant graph neural networks for fast electron density estimation
+of molecules, liquids, and solids. npjComputational Materials , 8(1):183, August 2022. ISSN 2057-3960. URL
+https://doi.org/10.1038/s41524-022-00863-y.
+[16]Kuzma Khrabrov, Ilya Shenbin, Alexander Ryabov, Artem Tsypin, Alexander Telepov, Anton Alekseev, Alexander
+Grishin, Pavel Strashnov, Petr Zhilyaev, Sergey Nikolenko, and Artur Kadurin. nablaDFT: Large-Scale Confor-
+mational Energy and Hamiltonian Prediction benchmark and dataset. Physical Chemistry Chemical Physics, 24
+(42):25853–25863, 2022. doi: 10.1039/D2CP03966D.
+[17]Kuzma Khrabrov, Anton Ber, Artem Tsypin, Konstantin Ushenin, Egor Rumiantsev, Alexander Telepov, Dmitry
+Protasov, Ilya Shenbin, Anton Alekseev, Mikhail Shirokikh, Sergey Nikolenko, Elena Tutubalina, and Artur
+10
+
+Kadurin. ∇2DFT: A Universal Quantum Chemistry Dataset of Drug-Like Molecules and a Benchmark for Neural
+Network Potentials, December 2024.
+[18]Seongsu Kim, Nayoung Kim, Dongwoo Kim, and Sungsoo Ahn. High-order Equivariant Flow Matching for Density
+Functional Theory Hamiltonian Prediction, May 2025.
+[19]W. Kohn and L. J. Sham. Self-Consistent Equations Including Exchange and Correlation Effects. Physical Review,
+140(4A):A1133–A1138, November 1965. ISSN 0031-899X. doi: 10.1103/PhysRev.140.A1133.
+[20]Risi Kondor and Shubhendu Trivedi. On the Generalization of Equivariance and Convolution in Neural Networks
+to the Action of Compact Groups. In Proceedings ofthe35thInternational Conference onMachine Learning ,
+pages 2747–2755. PMLR, July 2018.
+[21]Chengteh Lee. Development of the Colle-Salvetti correlation-energy formula into a functional of the electron
+density. Physical ReviewB, 37(2):785–789, 1988. doi: 10.1103/PhysRevB.37.785.
+[22]Ryong-Gyu Lee and Yong-Hoon Kim. Convolutional network learning of self-consistent electron density via
+grid-projected atomic fingerprints. npjComputational Materials , 10(1):248, October 2024. ISSN 2057-3960. URL
+https://doi.org/10.1038/s41524-024-01433-0.
+[23]Susi Lehtola. Assessment of initial guesses for self-consistent field calculations. superposition of atomic potentials:
+Simple yet efficient. J.Chem.TheoryComput. , 15(3):1593–1604, March 2019. ISSN 1549-9618. doi: 10.1021/acs.
+jctc.8b01089. URLhttps://doi.org/10.1021/acs.jctc.8b01089.
+[24]He Li, Zun Wang, Nianlong Zou, Meng Ye, Runzhang Xu, Xiaoxun Gong, Wenhui Duan, and Yong Xu. Deep-
+learning density functional theory Hamiltonian for efficient ab initio electronic-structure calculation. Nature
+Computational Science, 2(6):367–377, June 2022. ISSN 2662-8457. doi: 10.1038/s43588-022-00265-6.
+[25]Yunyang Li, Zaishuo Xia, Lin Huang, Xinran Wei, Han Yang, Sam Harshe, Zun Wang, Chang Liu, Jia Zhang,
+Bin Shao, and Mark B. Gerstein. Enhancing the Scalability and Applicability of Kohn-Sham Hamiltonians for
+Molecular Systems, February 2025.
+[26]Erpai Luo, Xinran Wei, Lin Huang, Yunyang Li, Han Yang, Zaishuo Xia, Zun Wang, Chang Liu, Bin Shao, and
+Jia Zhang. Efficient and Scalable Density Functional Theory Hamiltonian Prediction through Adaptive Sparsity,
+May 2025.
+[27]Paula Mori-Sánchez, Aron J. Cohen, and Weitao Yang. Localization and Delocalization Errors in Density
+Functional Theory and Implications for Band-Gap Prediction. Physical ReviewLetters, 100(14):146401, April
+2008. ISSN 0031-9007, 1079-7114. doi: 10.1103/PhysRevLett.100.146401.
+[28]Robert G. Parr and Weitao Yang. Density-Functional Theory ofAtomsandMolecules . Oxford University Press,
+May 1994. ISBN 978-0-19-535773-8.
+[29]John P. Perdew, Kieron Burke, and Matthias Ernzerhof. Generalized Gradient Approximation Made Simple.
+Physical ReviewLetters, 77(18):3865–3868, October 1996. doi: 10.1103/PhysRevLett.77.3865.
+[30]Angela D. Rabuck and Gustavo E. Scuseria. Improving self-consistent field convergence by varying occupation
+numbers. TheJournalofChemical Physics, 110(2):695–700, January 1999. ISSN 0021-9606, 1089-7690. doi:
+10.1063/1.478177.
+[31]Joshua A Rackers, Lucas Tecot, Mario Geiger, and Tess E Smidt. A recipe for cracking the quantum scaling limit
+with machine learned electron densities. Machine Learning: ScienceandTechnology, 4(1):015027, feb 2023. doi:
+10.1088/2632-2153/acb314. URLhttps://dx.doi.org/10.1088/2632-2153/acb314.
+[32]Raghunathan Ramakrishnan, Pavlo O. Dral, Matthias Rupp, and O. Anatole von Lilienfeld. Quantum chemistry
+structures and properties of 134 kilo molecules. Scientific Data, 1(1):140022, August 2014. ISSN 2052-4463. doi:
+10.1038/sdata.2014.22.
+[33]K. T. Schütt, M. Gastegger, A. Tkatchenko, K.-R. Müller, and R. J. Maurer. Unifying machine learning and
+quantum chemistry with a deep neural network for molecular wavefunctions. NatureCommunications , 10(1):5024,
+November 2019. ISSN 2041-1723. doi: 10.1038/s41467-019-12875-2.
+[34]Xuecheng Shao, Lukas Paetow, Mark E. Tuckerman, and Michele Pavanello. Machine learning electronic structure
+methods based on the one-electron reduced density matrix. NatureCommunications , 14(1):6281, October 2023.
+ISSN 2041-1723. URLhttps://doi.org/10.1038/s41467-023-41953-9.
+11
+
+[35]Qiming Sun, Xing Zhang, Samragni Banerjee, Peng Bao, Marc Barbry, Nick S. Blunt, Nikolay A. Bogdanov,
+George H. Booth, Jia Chen, Zhi-Hao Cui, Janus J. Eriksen, Yang Gao, Sheng Guo, Jan Hermann, Matthew R.
+Hermes, Kevin Koh, Peter Koval, Susi Lehtola, Zhendong Li, Junzi Liu, Narbe Mardirossian, James D. McClain,
+Mario Motta, Bastien Mussard, Hung Q. Pham, Artem Pulkin, Wirawan Purwanto, Paul J. Robinson, Enrico
+Ronca, Elvira R. Sayfutyarova, Maximilian Scheurer, Henry F. Schurkus, James E. T. Smith, Chong Sun, Shi-Ning
+Sun, Shiv Upadhyay, Lucas K. Wagner, Xiao Wang, Alec White, James Daniel Whitfield, Mark J. Williamson,
+Sebastian Wouters, Jun Yang, Jason M. Yu, Tianyu Zhu, Timothy C. Berkelbach, Sandeep Sharma, Alexander Yu.
+Sokolov, and Garnet Kin-Lic Chan. Recent developments in the PySCF program package. TheJournalof
+Chemical Physics, 153(2):024109, July 2020. ISSN 0021-9606. doi: 10.1063/5.0006074.
+[36]Attila Szabo and Neil S. Ostlund. Modern Quantum Chemistry: Introduction to
+Advanced Electronic Structure Theory. Courier Corporation, July 1996. ISBN 978-0-486-69186-2.
+[37]Zechen Tang, He Li, Peize Lin, Xiaoxun Gong, Gan Jin, Lixin He, Hong Jiang, Xinguo Ren, Wenhui Duan, and
+Yong Xu. A deep equivariant neural network approach for efficient hybrid density functional calculations. Nature
+Communications, 15(1):8815, October 2024. ISSN 2041-1723. doi: 10.1038/s41467-024-53028-4.
+[38]Oliver Unke, Mihail Bogojeski, Michael Gastegger, Mario Geiger, Tess Smidt, and Klaus-Robert
+Müller. SE(3)-equivariant prediction of molecular wavefunctions and electronic densities. In Advances in
+Neural Information Processing Systems, volume 34, pages 14434–14447. Curran Associates, Inc., 2021.
+[39] J. H. Van Lenthe, R. Zwaans, H. J. J. Van Dam, and M. F. Guest. Starting scf calculations by superposition of
+atomic densities. JournalofComputational Chemistry , 27(8):926–932, 2006. doi: https://doi.org/10.1002/jcc.
+20393. URLhttps://onlinelibrary.wiley.com/doi/abs/10.1002/jcc.20393.
+[40] S. H. Vosko, L. Wilk, and M. Nusair. Accurate spin-dependent electron liquid correlation energies for local spin
+density calculations: A critical analysis. Canadian JournalofPhysics, 58(8):1200–1211, August 1980. ISSN
+0008-4204, 1208-6045. doi: 10.1139/p80-159.
+[41]Johannes Voss. Machine learning for accuracy in density functional approximations. JournalofComputational
+Chemistry , 45(21):1829–1845, 2024. doi: https://doi.org/10.1002/jcc.27366. URL https://onlinelibrary.wiley.
+com/doi/abs/10.1002/jcc.27366.
+[42]Florian Weigend. Accurate Coulomb-fitting basis sets for H to Rn. Physical Chemistry Chemical Physics, 8(9):
+1057–1065, February 2006. ISSN 1463-9084. doi: 10.1039/B515623H.
+[43]Florian Weigend and Reinhart Ahlrichs. Balanced basis sets of split valence, triple zeta valence and quadruple
+zeta valence quality for H to Rn: Design and assessment of accuracy. Physical Chemistry Chemical Physics, 7
+(18):3297–3305, August 2005. ISSN 1463-9084. doi: 10.1039/B508541A.
+[44]Haiyang Yu, Zhao Xu, Xiaofeng Qian, Xiaoning Qian, and Shuiwang Ji. Efficient and Equivariant Graph Networks
+for Predicting Quantum Hamiltonian, November 2023.
+[45]Haiyang Yu, Meng Liu, Youzhi Luo, Alex Strasser, Xiaofeng Qian, Xiaoning Qian, and Shuiwang Ji. QH9: A
+Quantum Hamiltonian Prediction Benchmark for QM9 Molecules, March 2024.
+[46]Barbara Zdrazil, Eloy Felix, Fiona Hunter, Emma J Manners, James Blackshaw, Sybilla Corbett, Marleen de Veij,
+Harris Ioannidis, David Mendez Lopez, Juan F Mosquera, Maria Paula Magarinos, Nicolas Bosc, Ricardo Arcila,
+Tevfik Kizilören, Anna Gaulton, A Patrícia Bento, Melissa F Adasme, Peter Monecke, Gregory A Landrum, and
+Andrew R Leach. The ChEMBL Database in 2023: A drug discovery platform spanning multiple bioactivity
+data types and time periods. NucleicAcidsResearch , 52(D1):D1180–D1192, January 2024. ISSN 0305-1048. doi:
+10.1093/nar/gkad1004.
+[47]He Zhang, Chang Liu, Zun Wang, Xinran Wei, Siyuan Liu, Nanning Zheng, Bin Shao, and Tie-Yan Liu.
+Self-Consistency Training for Density-Functional-Theory Hamiltonian Prediction, June 2024.
+[48]Tianze Zheng, Ailun Wang, Xu Han, Yu Xia, Xingyuan Xu, Jiawei Zhan, Yu Liu, Yang Chen, Zhi Wang, Xiaojie
+Wu, Sheng Gong, and Wen Yan. Data-driven parametrization of molecular mechanics force fields for expansive
+chemical space coverage. Chemical Science, 16(6):2730–2740, 2025. doi: 10.1039/D4SC06640E.
+
+\section{Appendix
+A Error Sources in Constructing Hamiltonian from Density Coefficients}
+
+Table 3 compares the number of SCF cycles required for convergence for the D-Glucose molecule (C 6H12O6)
+using different sets of auxiliary basis sets and their corresponding number of basis functions. As shown,
+increasing the basis set size can reduce the number of SCF cycles to as low as 38.5\% of the baseline.
+Table 3Effect of auxiliary basis set size on SCF convergence for D-Glucose (C 6H12O6). SCF iteration ratios are
+reported as the number of iterations required for convergence, normalized to the default minaoinitial guess. With
+the def2-SVP basis set, D-Glucose has 228 basis functions. All results are obtained using the ground truth density
+coefficients as the initial guess.
+Auxiliary Basis Set Number of Basis Functions SCF Cycles SCF Iter. Ratio (\%)
+def2-universal-jfit 720 7 53.8
+ETB (β= 2.0)1740 7 53.8
+ETB (β= 1.5)2898 5 38.5
+B Computing the Density Coefficients
+In our work, the machine learning target is the set of expansion coefficients\{c k\}that represent the electron
+density ρ(r)in a given auxiliary basis set \{χk(r)\}. There are at least two principled ways to determine these
+ground-truth coefficients from a converged DFT calculation.
+The first approach is to minimize the squared error of the density itself, which corresponds to an L2 projection
+of the density onto the auxiliary basis. The objective is to find the coefficients \{ck\}that solve the following
+minimization problem:
+min
+\{ck\}Zρ(r)−X
+kckχk(r)2
+dr.(8)
+This leads to a system of linear equations:
+X
+lSaux
+klcl=Z
+ρ(r)χ k(r)dr,(9)
+whereSaux
+kl=R
+χk(r)χ l(r)dris the overlap matrix of the auxiliary basis functions.
+The second approach, which is the standard method in density fitting, is to minimize the error in the Coulomb
+repulsion energy. The objective is to minimize the self-repulsion of the residual density:
+min
+\{ck\}ZZ(ρ(r)−P
+kckχk(r)) (ρ(r′)−P
+lclχl(r′))
+|r−r′|drdr′.(10)
+This leads to a different system of linear equations:
+X
+kZZχk(r)χ k(r′)
+|r−r′|drdr′
+vk=ZZρ(r)χ l(r′)
+|r−r′|drdr′.(11)
+Here, the matrix on the left-hand side is the two-center two-electron Coulomb repulsion integral matrix for
+the auxiliary basis (int2c2ein PySCF).
+We tested both approaches and found that they yielded comparable performance for accelerating SCF
+convergence. For all results presented in this paper, we used the first method to generate the ground-truth
+density coefficients for our training data.
+
+\section{C Methods of Constructing Hamiltonian Matrix from Predicted Density
+We outline the construction of the initial Fock matrix for various types of functionals based on the electron}
+
+density. Specifically, this involves the evaluation of the Coulomb matrix ( J) and exchange-correlation (XC)
+matrix (V XC).
+The Coulomb matrix is evaluated using three-center electron repulsion integrals:
+Jµν=X
+i(µν|χ i)ci,(12)
+where
+(µν|χ i) =ZZµ(r1)ν(r 1)χi(r2)
+r12dr1dr2.(13)
+are the three-center two-electron integrals between the atomic orbital pair µ(r)ν(r)and the auxiliary function
+χ(r)
+For LDA and GGA functionals, the electron density and its gradients over the auxiliary basis functions can be
+readily computed. The XC matrix is then obtained by numerical integration over a set of Becke grids rgand
+its weightsω g:X
+gVxc[ρ,∇ρ]ω gµ(rg)ν(r g).(14)
+For meta-GGA functionals, the XC potential also depends on the kinetic energy density τ. The exact τis
+constructed from molecular orbitals, which are not available when our only input is the total electron density.
+We therefore approximate τusing the von Weizsäcker kinetic energy density, which provides an estimate
+based solely on the density and its gradient:
+τ(r) =1
+2X
+i∇ψi(r)· ∇ψ i(r)≈∇ρ· ∇ρ
+8ρ.(15)
+This allows for the evaluation of the meta-GGA XC matrix term:
+1
+2X
+gVxc[ρ,∇ρ, τ]ω g∇µ(r g)· ∇ν(r g).(16)
+For hybrid and range-separated functionals, the Hartree-Fock (HF) exchange matrix is needed. The HF
+exchange term is a function of the density matrix D. For a similar reason as with meta-GGA functionals—the
+difficulty of reconstructing Dfrom ρ—we must use an approximate density matrix. We employ the SAD
+density matrix (i.e.minao) as a chemically reasonable guess to construct the HF exchange matrix:
+DSAD=⊕ ADA,(17)
+D Hyperparameters and Training
+Hyperparameters for Model Architectures.
+For QHNet models, we adopt the same hyperparameters as those used in Yu et al. [45]. The hyperparameters
+for the backbone are kept unchanged for different prediction targets to ensure a fair comparison.
+For Nequip models, three variants of different sizes are trained and evaluated, namely NequIP-S, NequIP-M
+and NequIP-L. The sizes of the models are kept the same across different auxiliary basis set choices.
+Hyperparameters for all these four architectures are summarized in Table 4.
+Hyperparameters for different prediction targets.Hyperparameters for training models for different prediction
+targets are summarized in Table 5. All models have converged after the training finished.
+14
+
+Table 4Hyperparameters for model architectures.
+Model Hyperparameter Value
+QHNet radius cutoff 15.0
+Lmax 4
+hidden size 128
+bottleneck hidden size 32
+number of layers 5
+radius embed dim 16
+NequIP-S radius cutoff 5.0
+lmax 4
+number of layers 4
+hidden size 32
+radial MLP width 64
+NequIP-M radius cutoff 5.0
+lmax 4
+number of layers 7
+hidden size 64
+radial MLP width 128
+NequIP-L radius cutoff 5.0
+lmax 4
+number of layers 9
+hidden size 64
+radial MLP width 128
+Table 5Hyperparameters for training.
+Hyperparameter Hamiltonian Density Matrix Density Coefficients
+Max Epochs 5000 5000 5000*
+Batch Size 1024 1024 1024
+Optimizer Adam Adam Adam
+Learning Rate Scheduler Polynomial Polynomial Polynomial
+Learning Rate 5e-3 5e-3 2e-2
+Minimum Learning Rate 1e-7 1e-7 1e-7
+*: The NequIP-S and NequIP-M models are trained for 2000 epochs.
+E Extended Results on SCFbench
+To provide a more comprehensive view of model performance, we report an extended set of evaluation metrics
+on SCFbench in Table 6. The definitions of the metrics are detailed below.
+MAE(prediction).The mean absolute error of the model predictions. Note that values of this metric cannot be
+compared across different prediction targets.
+MAE(C).The mean absolute error of the molecular orbital coefficients obtained from the initial guesses
+predicted by the model.
+Csimilarity.The cosine similarity between the predicted and the ground-truth molecular orbital coefficients.
+15
+
+Table 6Extended results on the SCFbench dataset. The unit for energy is Hartree.
+Prediction Target ModelID Test OOD Test
+MAE(prediction)↓MAE(C)↓CSimilarity↑MAE(prediction)↓MAE(C)↓CSimilarity↑
+HamiltonianQHNet 4.0e-5 0.1527 0.8459 1.7e-3 0.1586 0.1572
+Density MatrixQHNet 5.3e-4 0.1314 0.9656 1.4e-3 0.1464 0.5101
+Density Coefficients
+def2-universal-jfitQHNet 1.7e-4 0.0786 0.9814 5.0e-4 0.1085 0.8763
+NequIP-S 2.7e-4 0.0995 0.9512 5.7e-4 0.1312 0.6863
+NequIP-M 1.1e-4 0.0746 0.9846 4.0e-4 0.0964 0.9136
+NequIP-L 8.9e-5 0.0788 0.9865 3.8e-4 0.0928 0.9334
+Density Coefficients
+ETB,β= 2.0QHNet 1.8e-4 0.0816 0.9815 7.0e-4 0.1166 0.7981
+NequIP-S 3.5e-4 0.1151 0.8989 8.7e-4 0.1486 0.4501
+NequIP-M 1.6e-4 0.0832 0.9819 7.2e-4 0.1153 0.8113
+NequIP-L 1.0e-4 0.0695 0.9907 5.4e-4 0.0985 0.8990
+Density Coefficients
+ETB,β= 1.5QHNet 1.2e-3 0.1096 0.9395 3.8e-3 0.1367 0.6119
+NequIP-S 1.7e-3 0.1329 0.8298 4.2e-3 0.1507 0.4167
+NequIP-M 1.2e-3 0.1051 0.9429 4.0e-3 0.1375 0.5738
+NequIP-L 8.7e-4 0.0887 0.9784 3.7e-3 0.1189 0.7767
+F Results for Wavefunction Alignment Loss (WALoss)
+The Wavefunction Alignment Loss (WALoss) is proposed by Li et al. [25]for solving the Scaling-induced
+MAE-Applicability Divergence (SAD) problem and enhancing the scalability and applicability of Hamiltonian
+prediction models. As the WALoss is originally used to train the model on the PubChemQH dataset consisting
+of relatively large molecules, it is thus interesting to find out whether WALoss is able to solve the transferability
+problem of Hamiltonian prediction. Therefore, although there is no publicly available code for WALoss, we
+reimplement it ourselves and test it with QHNet on our SCFbench dataset.
+There are multiple hyperparameters in WALoss, including the λ1,λ2andλ3for weighting the elementwise
+error losses and WALoss, and the ρandξfor weighting the WALoss terms for occupied and unoccupied
+orbitals, respectively. The optimal values of λs are thoroughly discussed in the original paper, but the values
+ofρandξare unspecified except the description of ρ≫ξ. Therefore, we adopt the optimal values for the λs
+from the original paper ( λ1= 1.0, λ2= 1.0, λ3= 2.5), fix ρto be1 .0and experiment with various values for ξ.
+As listed in Table 7, some settings outperform the original QHNet on the ID test set, but when tested on the
+OOD test set, none of them show advantage in system size transferability in terms of RIC. We suspect that
+WALoss is great for solving the learnability problem of the Hamiltonian prediction task on large molecules
+(such as those in the PubChemQH dataset), but still falls short in overcoming the task’s inherent transferability
+issues.
+Table 7WALoss results on the SCFbench benchmark dataset.
+ModelξID Test OOD Test
+Convergence↑RIC↓Convergence↑RIC↓
+QHNet w/o WALoss- 100\% 63.20\% 97.43\% 179.47\%
+QHNet w/ WALoss1.0 100\% 69.56\% 99.57\% 173.07\%
+0.5 100\% 67.97\% 97.61\% 183.31\%
+0.3 100\% 67.08\% 98.64\% 179.77\%
+0.1 100\% 67.11\% 98.40\% 170.57\%
+0.01 100\% 62.65\% 98.40\% 173.08\%
+0.001 100\% 62.66\% 97.25\% 177.35\%
+16
+
+\end{document}
