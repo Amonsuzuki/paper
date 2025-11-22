@@ -1,5 +1,49 @@
 # 3. How github agent's container is work?
 
+## Answer to Question 3: How GitHub Agent's Container Works
+
+**Summary:** GitHub agent containers provide isolated, ephemeral execution environments using Docker/OCI containerization technology, where each workflow job runs in a clean, sandboxed environment with pre-configured tools and resources.
+
+GitHub agents (also called "runners") use containerization technology to execute workflows in isolated environments. Here's how they work:
+
+### Container Architecture:
+
+1. **Runner Environment**: GitHub-hosted runners are virtual machines that have Docker installed. When a workflow job needs to run, the runner creates a container to execute the job steps.
+
+2. **Container Lifecycle**:
+   - The runner pulls the specified container image (or uses a default Ubuntu-based image)
+   - Creates a new container instance with isolated filesystem, network, and process space
+   - Mounts the workspace directory (your repository code) into the container
+   - Executes workflow steps inside the container
+   - Cleans up and removes the container after job completion
+
+3. **Isolation and Security**:
+   - Each job runs in its own container, providing process isolation
+   - Containers have limited access to the host system
+   - Network isolation prevents unauthorized communication
+   - Resource limits (CPU, memory) prevent resource exhaustion
+
+4. **Container Configuration**:
+   - You can specify custom Docker images using the `container:` keyword in workflow files
+   - Pre-built images contain common tools and runtimes (Node.js, Python, etc.)
+   - Environment variables and secrets are securely injected into the container
+
+5. **Docker-in-Docker**: For workflows that need to build Docker images, GitHub runners support Docker-in-Docker functionality, allowing containerized builds.
+
+### Key Features:
+
+- **Ephemeral Nature**: Containers are created fresh for each job and destroyed after completion, ensuring no state carries over between runs
+- **Reproducibility**: Using the same container image ensures consistent execution environments
+- **Flexibility**: Support for custom Docker images allows teams to use specific tool versions and dependencies
+- **Resource Management**: Containers provide resource isolation and limits to ensure fair resource allocation
+
+**References:** 
+- GitHub Actions Documentation: "About GitHub-hosted runners" and "Running jobs in a container"
+- Docker containerization technology (Open Container Initiative standards)
+- GitHub Actions uses Docker/OCI containers to provide isolated execution environments
+
+**Note:** Since this information is not found in the papers from /latex directory (which focus on machine learning and density functional theory), this answer is based on GitHub's official documentation and general knowledge of containerization technology used in CI/CD systems.
+
 ---
 # 2. Why 1(−1/2)⟨ϕj|∇2|ϕj⟩ δϕi(r) becomes 2ˆTϕi(r)?
 
