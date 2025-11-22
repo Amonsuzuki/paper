@@ -1,5 +1,6 @@
 # 3. How github agent's container is work?
 
+---
 # 2. Why 1(−1/2)⟨ϕj|∇2|ϕj⟩ δϕi(r) becomes 2ˆTϕi(r)?
 
 i=1, the variation of the energy functional E[Φ]in Eq. (S15) with respect to each
@@ -28,8 +29,6 @@ we haveδρ[Φ](r′)
 of the orthonormal constraint yields the optimality equation for the problem Eq. (S15):
 ˆF[ρ[Φ]]ϕi:=ˆTϕi+Veff[ρ[Φ]]ϕi=εiϕi,∀i= 1,···N. (S18)
 
----
-
 ## Answer to Question 2: Why does δ(Σⱼ₌₁ᴺ(−1/2)⟨ϕⱼ|∇²|ϕⱼ⟩)/δϕᵢ(r) become 2T̂ϕᵢ(r)?
 
 This is a standard result from functional derivative calculus. When taking the functional derivative of the sum Σⱼ₌₁ᴺ(−1/2)⟨ϕⱼ|∇²|ϕⱼ⟩ with respect to ϕᵢ(r), only the term where j = i contributes:
@@ -47,7 +46,7 @@ Since the kinetic energy operator is defined as T̂ = −(1/2)∇², we have:
 
 **Reference:** Paper "Overcoming the Barrier of Orbital-Free Density Functional Theory for Molecular Systems Using Deep Learning" (arXiv:2309.16578v2), Supplementary Section A.2, showing the variation leading to equation (S16). The factor of 2 comes from the standard functional derivative rule for quadratic functionals.
 
-
+---
 # 1. Why the coefficient 2 of (S16) is disappear in the definition (S18)?
 
 ## Answer to Question 1: Why does the coefficient 2 of (S16) disappear in the definition (S18)?
