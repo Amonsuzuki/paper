@@ -1,0 +1,2541 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{natbib}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{url}
+\geometry{margin=1in}
+
+\title{LightPFP: A Lightweight Route to Ab Initio Accuracy at Scale}
+\author{Wenwen Li; Nontawat Charoenphakdee; Yong-Bin Zhuang; Ryuhei Okuno; Yuta Tsuboi; So Takamoto; Junichi Ishida; Ju Li}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+LightPFP: A Lightweight Route to Ab Initio Accuracy at Scale
+Wenwen Li,1Nontawat Charoenphakdee,1Yong-Bin Zhuang,1Ryuhei Okuno,1Yuta Tsuboi,1So Takamoto,1
+Junichi Ishida,2and Ju Li3,4
+1)Preferred Networks Inc., Tokyo, Japan.
+2)Matlantis Corporation, Tokyo, Japan.
+3)Department of Materials Science and Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139,
+USA
+4)Department of Nuclear Science and Engineering, Massachusetts Institute of Technology, Cambridge, MA,
+USA
+(*Electronic mail: nontawat@preferred.jp )
+(*Electronic mail: wenwenli@preferred.jp )
+(Dated: 7 November 2025)
+Atomistic simulation methods have evolved through successive computational levels, each building upon more
+fundamental approaches: from quantum mechanics to density functional theory (DFT), and subsequently, to
+machine learning interatomic potentials (MLIPs). While universal MLIPs (u-MLIPs) oﬀer broad transfer-
+ability, their computational overhead limits large-scale applications. Task-speciﬁc MLIPs (ts-MLIPs) achieve
+superior eﬃciency but require prohibitively expensive DFT data generation for each material system. In
+this paper, we propose LightPFP, a data-eﬃcient knowledge distillation framework. Instead of using costly
+DFT calculations, LightPFP generates a distilled ts-MLIP by leveraging u-MLIP to generate high-quality
+training data tailored for speciﬁc materials and utilizing a pre-trained light-weight MLIP to further enhance
+data eﬃciency. Across a broad spectrum of materials, including solid-state electrolytes, high-entropy alloys,
+and reactive ionic systems, LightPFP delivers three orders of magnitude faster model development than
+conventional DFT-based methods, while maintaining accuracy on par with ﬁrst-principles predictions. More-
+over, the distilled ts-MLIPs further sustain the computational eﬃciency essential for large-scale molecular
+dynamics, achieving 1-2 orders of magnitude faster inference than u-MLIPs. The framework further enables
+eﬃcient precision transfer learning, where systematic errors from the u-MLIP can be corrected using as few
+as 10 high-accuracy DFT data points, as demonstrated for MgO melting point prediction. This u-MLIP-
+driven distillation approach enables rapid development of high-ﬁdelity, eﬃcient MLIPs for materials science
+applications.
+I. INTRODUCTION
+The development of accurate and computationally ef-
+ﬁcient atomistic energy methods is critical for enabling
+large-scale atomistic simulations in materials science,
+catalysis, and chemistry. The evolution of these methods
+over several decades can be conceptualized as an ecolog-
+ical “food chain” (Fig. 1), where each higher level “feeds
+on” the computational results of lower levels, gaining eﬃ-
+ciency while potentially sacriﬁcing some accuracy in the
+process.
+At the bottom of the food chain lie the most accu-
+rate but computationally intensive quantum mechanical
+methods, such as full conﬁguration interaction (FCI) and
+quantum Monte Carlo (QMC). Although formally exact,
+they do not have great performance in computational
+and memory scaling with the number of electrons, and
+therefore are limited to systems with on the order of ten
+atoms. The second level is occupied by density func-
+tional theory (DFT), which “consumes” the results from
+lowest-rung, for example, electron gas simulations using
+QMC,1to parametrize its exchange-correlation function-
+als (e.g. PBE generalized gradient approximation, or
+r2SCAN meta-GGA approximation). DFT can handle
+a few hundred atoms, which is the reason it is widely
+used for crystal structure discovery and property predic-tion. However, it is computationally challenging to simu-
+late extended defects directly, or even ﬁnite-temperature
+sampling.
+Moving up the chain, machine learning interatomic
+potentials (MLIPs) represent the third level, “feeding
+on” large datasets of DFT calculations. Among these,
+universal MLIPs (u-MLIPs) have gained signiﬁcant at-
+tention for their broad chemical transferability. They
+are trained on chemically diverse structures spanning
+many elements and bonding motifs, and they encode
+physical symmetries to generalize across the periodic
+table, e.g., PFP,2M3GNet,3CHGNet,4MACE-MP-
+0.5,6In particular, PFP is noted for being trained
+on a highly complex and diverse DFT database, con-
+tributing to its superior robustness. Numerous studies
+have demonstrated its applicability without ﬁne-tuning
+across a wide range of materials, including battery,7–12
+metal-organic framework,13,14ceramics,15,16catalyst,17
+polymer,18nanotube,19atomic layer deposition,20,21Hy-
+drogen storage,22superconductor,23memristor.24De-
+spite their universality, computational eﬃciency remains
+a bottleneck in large-scale simulations.
+This raises a fundamental question: can we extend
+this food chain further to achieve even greater computa-
+tional eﬃciency? Task-speciﬁc MLIPs (ts-MLIPs) with
+simpler architectures, such as moment tensor potentialarXiv:2510.23064v2 [cond-mat.mtrl-sci] 6 Nov 2025
+
+2
+Formally exact methods: 
+Quantum Monte Carlo, Full CI, …Density functional theory: 
+PBE, r2SCAN, …u-MLIP: 
+PFP, MACE-MP-0, …u-MLIP 
+distillation:
+LightPFP
+\~{}100 meV/atom\~{}20 meV/atom\~{}10 meV/atom
+Super 
+slowVery slowLinear scaling,
+but slow;
+\~{}104atomsLinear scaling,
+fast-to-train,
+fast-to-run,
+\~{}106atoms
+FIG. 1: A standard “food chain” of atomistic calculation
+methods.
+(MTP),25DeePMD,26and Allegro,27demonstrate that
+signiﬁcant speed improvements are possible, but they
+face a critical bottleneck. These methods still “feed” di-
+rectly on DFT data—the same food source as universal
+MLIPs—requiring extensive and time-consuming DFT
+calculations for each new material system. This train-
+ing strategy can take weeks or months, severely limiting
+their practical deployment despite their superior infer-
+ence speed.
+To overcome the bottlenecks of both u-MLIPs and ts-
+MLIPs, we propose LightPFP, a fast-to-train and fast-to-
+run framework for constructing ts-MLIPs through knowl-
+edge distillation from a u-MLIP. LightPFP achieves a
+favorable balance between computational eﬃciency and
+accuracy while avoiding the prohibitive training costs of
+traditional ts-MLIPs that arise from DFT calculations.
+To support the assessment of LightPFP’s evolutionary
+position toward the “apex predator” in the ecosystem of
+atomistic methods, let us consider diﬀerent sources of er-
+ror in a practical atomistic simulation, vis-à-vis the com-
+putational cost. For reference, even though Fig. 1does
+not show any experimental method, the typical error bars
+inexperimental thermochemical measurements of forma-
+tion/reaction enthalpies are taken to be 1 kcal/mol, the
+so-called “chemical accuracy” as named by John Pople,28
+which is 43 meV/atom. The formally exact calculations,
+when fully converged in basis sets, etc., should agree with
+present-day state-of-the-art experiments to much better
+than the chemical accuracy, so much so that these calcu-
+lations are sometimes taken to be the ground truth rather
+than the experiments. In fact, the largest error comes
+from the formally exact →DFT (Fig. 1), due to the intrin-
+sic limitations of DFT expressivity. Next, the training of
+DFT→PFP takes a long time and a lot of resources,29
+but that is already done for each released version of PFP,
+and the ﬁnal DFT →PFP transfer error is small. As will
+be shown in the present paper, the PFP →LightPFP ex-
+hibits smaller transfer errors and faster training time,
+comparing to DFT →PFP (Supplementary Note 1).
+One should also consider that many practical simula-
+tion tasks incur error beyond the intrinsic level-of-theory
+error. For example, in computing the defect formation
+energies, if a small calculation supercell with periodicboundary condition (PBC) is used, there will be image
+interactions30both electronically and elastically. Thus,
+even if DFT is intrinsically more accurate than LightPFP
+by 30 meV/atom, LightPFP may end up giving more ac-
+curate defect formation energy and other defect reaction
+behaviors, by virtue of using a much larger simulation
+supercell that greatly reduces the image artifacts. Such
+broadly applicable calculations are much, much faster to
+run, and potentially more accurate than DFT in prac-
+tice, thus, might become really competitive in the atom-
+istic simulator ecosystem. The broad applicability of
+LightPFP to various systems, from solid electrolyte to
+metallurgy, from semiconductor processing to hard ce-
+ramics, will be demonstrated in this paper.
+Occasionally, developers skip levels on the food chain.
+For example, recently a so-called Multi-task Electronic
+Hamiltonian Network (MEHnet)31was developed, which
+can serve as ts-MLIP (besides other functions) for H, C,
+N, O and F elements and organic hydrocarbons. This was
+based on CCSD(T) →MEHnet direct transfer. CCSD(T)
+is called the “gold standard of quantum chemistry”, close
+to the bottom-rung of the food chain, typically achieving
+0.1 kcal/mol error with respect to the exact calculations.
+DFT and u-MLIP rungs were skipped in the construc-
+tion. Although the CCSD(T) →MEHnet transfer error is
+very small, typically less than 10 meV/atom. the train-
+ing process was very expensive. As a result, no broad
+applicability was achieved yet across the whole periodic
+table. As another example, the original MTP poten-
+tials were trained by DFT →MTP, skipping the u-MLIP
+rung. However, the process cannot be done overnight
+for a stated chemical space and may take several months
+to generate the necessary data. Based on the foregoing
+discussion, it is likely that DFT →PFP→LightPFP may
+achieve the best universality, practicality, and speed, thus
+becoming a potential “apex” on the food chain.
+In this paper, we ﬁrst provide an overview of the
+LightPFP knowledge-distillation framework and an as-
+sessment of the data eﬃciency of its distilled, pre-trained
+student models. We then demonstrate LightPFP across
+four challenging applications that highlight comple-
+mentary aspects of the method: (1) Li+diﬀusion in
+the solid electrolyte Li 6PS5Cl and (2) the mechanical
+and grain-boundary properties of the high-entropy al-
+loy AlCoCrFeNi, both illustrating the trade-oﬀ between
+model-building/inference speed and predictive accuracy;
+(3) the reaction kinetics of SiO 2etching by HF vapor,
+showcasing the integration of model distillation with ac-
+tive learning for complex reactive simulations; and (4) the
+melting point of MgO, demonstrating that when u-MLIP
+precision is insuﬃcient, transfer learning with a small,
+high-accuracy DFT dataset can substantially improve
+performance.
+
+3
+Perspective Morrow et al.32Amin et al.33Gardner et al.34Zhang et al.35This work
+Teacher is trained from diverse datasets × ✓ ✓ ✓ ✓
+Use teacher in data generation ✓ × ✓ ✓ ✓
+Use active learning with teacher’s labels × × ✓ ✓ ✓
+Use student pretraining × × × × ✓
+Does not require teacher’s ﬁne-tuning × × × × ✓
+TABLE I: Comparisons of the LightPFP framework with existing works related to distillation across diﬀerent
+perspectives.
+Training data 
+generation using PFPEvaluation 
+using PFPStudent 
+fine-tuning
+Target structure
+Pre-trained student for 
+target elements (MTP)
+Task-specific 
+parameter 
+extraction
+Pre-trained teacher 
+(PFP)
+Pre-trained student 
+(MTP)Large 
+DFT dataset
+FIG. 2: Schematic diagram of LightPFP.
+II. RESULTS
+A. LightPFP Framework Overview
+In this section, the overview of LightPFP is presented.
+For the teacher model, we employ PFP2based on TeaNet
+architecture.36As the student model, we adopt the Mo-
+ment Tensor Potential (MTP), proposed by Novikov et
+al.25due to its favorable trade-oﬀ between accuracy and
+eﬃciency.37The workﬂow of LightPFP shown in Fig. 2
+begins by deﬁning a target structure and generating
+training data using PFP, including sampling and label-
+ing. Students are pre-trained using Reptile meta-learning
+algorithm38on diverse datasets described in reference 2.
+Finally, the reduced model is then ﬁne-tuned using PFP-
+generated data, followed by an evaluation to assess its
+performance. Importantly, pretrained students only need
+to prepare once in advance, and can be reused across a
+wide range of applications. Moreover, the model sizes of
+pretrained students can be reduced by removing MTP
+parameters for element pairs that are not present in the
+structure when they cover more elements than needed for
+a speciﬁc material.
+B. Data eﬃciency of pretrained student models
+We ﬁrst demonstrate the enhanced data eﬃciency of
+pretrained student models, using the Ni 3Al alloy39asan example. To this end, a full dataset containing 1529
+structures is prepared through the comprehensive sam-
+pling involving PFP2in the relevant conﬁguration space.
+The sampling methods comprise static and dynamic sam-
+pling. The static method samples static structures by
+compressing and deforming their lattice, as well as dis-
+placing atomic positions. The dynamic sampling uses
+MD simulations with initial conﬁgurations of both defect-
+free and defective bulk structures, as well as surface struc-
+tures. The details of sampling parameters are provided in
+SI. For testing data eﬃciency, smaller datasets with sizes
+ranging from 100 to 850 are created by two methods,
+subsampling from the full dataset and direct sampling
+through the decrease of MD steps. Each size dataset
+is created ﬁve times to obtain the uncertainties of er-
+rors. Structures in the datasets obtained by subsampling
+tend to be more widely distributed in conﬁguration space,
+whereas direct sampling is closer to common user prac-
+tice in real situations (i.e. by decreasing MD steps).
+We compare the performance of ﬁne-tuned pretrained
+and scratch-trained student models on energy and force
+errors, as shown in Fig. 3a,b. Across all dataset sizes,
+the ﬁne-tuned pretrained student models outperform the
+scratch-trained student models. We note that ﬁnetuning
+pretrained student models on 100 structures performs
+almost as well as on 1529 structures. In addition to
+the standard energy and force testings, we validate the
+performance of student models on diﬀerent application
+tasks, for instance, phonon spectra and surface energies,
+as shown in Fig. 3c,d. Comparable to the energy and
+
+4
+FIG. 3: Comparison of data eﬃciency between ﬁne-tuned pretrained and scratch-trained student models.
+force testings, the performance of ﬁne-tuned pretrained
+models is better than the scratch-trained models. Simi-
+lar performance trend can be observed in other properties
+(See SI).
+Moreover, the performance of ﬁne-tuned pretrained
+student models is more robust in application tasks,
+whereas scratch-trained models show typical overﬁtting
+behavior. The force errors from the scratch-trained mod-
+els on the smaller datasets are lower than on the larger
+dataset as shown in Fig. 3(b). However, the errors on
+phonon spectra and surface energies are larger as shown
+in Fig. 3(c,d). In contrast, although ﬁne-tuned pretrained
+student models show a similar trend on force testing,
+their performance on application tasks are consistently
+reliable across various dataset sizes.
+C. Li 6PS5Cl
+This example focuses on a common solid-state elec-
+trolyte, Li 6PS5Cl, renowned for its high ionic conductiv-
+ity, with potential applications in solid-state battery de-
+velopment. Extensive experimental and theoretical stud-
+ies have been conducted on Li 6PS5Cl. For example, Deng
+et al.40usedab initio MD to calculate the diﬀusion co-
+eﬃcient and diﬀusion activation energy (0.52 eV) of Li
+in Li 6PS5Cl crystals. The Li 6PS5Cl system is used as an
+example to demonstrate the advantages of the model dis-
+tillation method compared to other approaches: (1) di-
+rectly using universal potentials, and (2) training MLIPswith traditional DFT datasets. We ﬁrst validate the ef-
+fectiveness of the model distillation approach.
+We compare four strategies for using MLIPs to perform
+atomistic simulations of Li 6PS5Cl. These are: directly
+using the u-MLIP PFP v7.0.0; distilling a compact task-
+speciﬁc MLIP with the MTP architecture from PFP (as
+described above), yielding LightPFP; using another u-
+MLIP, MACE-MP-0b3;6and training an MTP model di-
+rectly on DFT data (MTP-DFT). For brevity, we refer to
+these strategies throughout as PFP, LightPFP, MACE,
+and MTP-DFT, respectively. LightPFP and MTP-DFT
+share the same MTP architecture, hyperparameters, and
+software implementation; consequently, their inference-
+time eﬃciency is essentially identical.
+The LightPFP model is obtained by distilling knowl-
+edge from the PFP through a two-step data collection
+process: (i) sampling Li 6PS5Cl conﬁgurations by molec-
+ular dynamics and other molecular simulations (such as
+lattice stretching, compression, deformation, atomic dis-
+placement, etc.) and (ii) labeling the sampled conﬁgu-
+rations by PFP to obtain their corresponding energies,
+forces, and stresses. Dataset acquisition takes 3.5 hours
+on a single GPU. The dataset composition is listed in
+Table II. Additionally, our commonly used data collec-
+tion methods are detailed in supplementary information
+I. Subsequently, we perform 1 hour of training, using
+weights from a pretrained MTP model for initialization.
+Ultimately, using only 4.5 hours, we obtain the LightPFP
+model. MTP-DFT shares the same MLIP architecture
+as LightPFP, but its dataset is labeled with DFT. To re-
+duce cost, we generated trajectories with PFP and then
+
+5
+TABLE II: Composition of the training dataset for Li 6PS5Cl
+Sampling Number of Number of Comment
+method structures atoms
+LightPFP Dataset (labeled by PFP)
+MD 1600 374400 NPT MD at 300, 500, 1000, 1500K;
+1 sample per 100 steps
+rattle 10 4160 Random displacement of atoms
+compress 22 1144 Compress and stretch lattice
+deform 48 2496 Deform lattice
+vacancy 100 5100 Create 1\~{}2 vacancy
+Total 1780 387300
+MTP-DFT Dataset (labeled by DFT)
+MD 800 41600 NPT MD at 300, 500, 1000, 1500K
+1 sample per 100 steps
+rattle 10 520 Random displacement of atoms
+compress 22 1144 Compress and stretch lattice
+deform 48 2496 Deform lattice
+vacancy 100 5100 Create 1\~{}2 vacancy
+Total 980 50860
+performed post hoc DFT single-point calculations to la-
+bel the sampled snapshots, rather than running fully ab
+initio MD. Even so, end-to-end data collection required
+approximately 100 hours of wall-clock time on our setup.
+Using a simple extrapolation—multiplying the number of
+MD steps by the average wall time per DFT single-point
+used for labeling—we estimate that fully DFT-driven MD
+would take on the order of 8,000 hours under compa-
+rable settings. Thus, constructing a ts-MLIP in this
+traditional DFT-labeled manner is substantially more
+time- and compute-intensive than the distilled LightPFP
+route. The dataset composition is listed in Table II. Be-
+cause Kohn–Sham DFT in plane-wave nominally scales
+as O(N3) with system size, we prioritized smaller cells;
+consequently, the MTP-DFT dataset is overall smaller
+and skewed toward structures with fewer atoms com-
+pared to the LightPFP dataset. After data collection,
+model training took about one hour.
+After preparing the four models, we ﬁrst test their
+computational speed and memory eﬃciency. Figure 4(a)
+shows the MD inference speed varied with diﬀerent num-
+bers of atoms on NVIDIA V100 GPUs with 16 GB GPU
+memory. The fastest inference speed of LightPFP/MTP-
+DFT (9.7×10−7s/step/atom) is about 50 times faster
+than PFP ( 4.9×10−5s/step/atom) and about 160 times
+faster than MACE ( 1.6×10−4s/step/atom). In addi-
+tion, the maximum size that LightPFP/MTP-DFT can
+simulate on a single GPU, i.e., GPU memory eﬃciency,
+far exceeds that of other models. On a GPU with 16 GB
+memory, LightPFP/MTP-DFT can simulate up to ap-
+proximately 811,200 atoms, which is 14 times that of PFP
+(5,616 atoms) and 21 times that of MACE (3,900 atoms).
+Note that the inference speed of LightPFP/MTP-DFT is
+related to the model’s hyperparameters (e.g., level max,
+number of radial basis functions, etc.).
+In Fig. 4(b), we plot MD inference speed per atom
+against MLIP construction time. As expected fromtheir simpler architectures, LightPFP and MTP-DFT de-
+liver 1–2 orders of magnitude higher per-step throughput
+than the u-MLIPs (PFP and MACE). The corresponding
+trade-oﬀ is that u-MLIPs require no task-speciﬁc con-
+struction, whereas LightPFP and MTP-DFT incur up-
+front costs. Notably, LightPFP’s construction is approx-
+imately three orders of magnitude faster than the DFT-
+based workﬂow used for MTP-DFT, owing to the much
+cheaper data collection via the PFP teacher.
+The inset of Fig. 4(b) aggregates construction and run-
+time to estimate the total wall-clock time to simulate
+a 10,000-atom Li 6PS5Cl system for 10 ns with a 1 fs
+timestep ( 107steps). Under this scenario, LightPFP
+achieves the shortest total time, completing the task
+44–139 ×faster than u-MLIPs, and its advantage grows
+with increasing MD length. Conversely, for very short
+simulations, LightPFP’s initial construction overhead
+can diminish its advantage relative to u-MLIPs. Despite
+similar inference speed to LightPFP, MTP-DFT remains
+slower overall because its total time is dominated by DFT
+data generation.
+While LightPFP oﬀers substantially higher overall ef-
+ﬁciency—both in MLIP construction and MD simula-
+tion—than existing u-MLIPs and DFT-trained MLIPs,
+its attainable precision is constrained by two factors:
+(i) reduced model capacity relative to u-MLIPs and
+(ii) training on PFP-generated labels rather than DFT,
+which can propagate the teacher’s deviations from DFT.
+To quantify these eﬀects, we benchmark force predic-
+tions against DFT dataset used for MTP-DFT training
+(Fig. 5). PFP attains the lowest MAE (0.028 eV/Å).
+As expected, LightPFP exhibits a modestly higher MAE
+(0.053 eV/Å), reﬂecting both inherited PFP errors and
+architectural simpliﬁcation. For comparison, the MTP-
+DFT trained directly on this dataset achieves 0.044
+eV/Å; because portions of the DFT set were used for
+training, only the 10\% held-out test split is shown in
+
+6
+FIG. 4: (a) Molecular dynamics (MD) computational
+speed with Li 6PS5Cl as a function of number of atoms
+for three MLIPs: PFP, LightPFP (MTP), and MACE.
+(b) Trade-oﬀ between the overall time spent on MLIP
+building for Li 6PS5Cl, including data collection and
+model training, and MD computational speed for PFP,
+LightPFP, MACE, and MTP-DFT. Inset: the total
+time cost to complete both MLIP building and a 10 ns
+MD simulation of a 10,000-atom system With PFP,
+LightPFP, MACE, and MTP-DFT.
+the parity plot. Crucially, the gap between LightPFP
+and PFP/MTP-DFT is small, supporting the feasibility
+of distilling a reliable u-MLIP into a lightweight model
+with limited loss in precision. Notably, MACE shows the
+largest MAE (0.061 eV/Å), underscoring the importance
+of teacher quality: a strong universal teacher can yield a
+student that, on this benchmark, rivals or even surpasses
+more complex models trained directly on DFT.
+We next examine how the force-accuracy diﬀerences
+translate into a transport property by computing Li+dif-
+fusion in Li 6PS5Cl. The workﬂow is: (i) relax a 1 ×1×1
+Li6PS5Cl cell (52 atoms), optimizing both atomic posi-
+tions and lattice; (ii) run NVT MD for 100 ps at 600, 700,
+800, 900, and 1000 K, using the same settings as the ab
+initio MD in reference,40with eight independent repli-
+cas per temperature for statistics; (iii) extract Li+dif-
+fusion coeﬃcients from the mean-squared displacement.
+FIG. 5: Parity plot comparing atomic forces predicted
+by MLIPs to DFT reference values (a) PFP; (b)
+LightPFP; (c) MACE and (d) MTP-DFT
+FIG. 6: Arrhenius plot of Li+diﬀusivity in Li 6PS5Cl
+fromab initio MD simulations40and four MLIPs (PFP,
+LightPFP, MACE, and MTP-DFT). The diﬀusion
+coeﬃcient are averaged over eight independent
+trajectories; the corresponding activation energy Eais
+reported in the legend and error bar is derived from the
+standard error of ﬁtted slope.
+Figure 6compiles diﬀusion coeﬃcients from the four
+MLIPs alongside ab initio MD results from the literature.
+Consistent with the force-MAE trends, all four MLIPs
+slightly overestimate diﬀusion relative to the DFT refer-
+ence at every temperature. Among them, PFP is closest
+to DFT, while MACE shows the largest overestimation,
+in line with its higher force MAE. Notably, LightPFP
+and MTP-DFT exhibit overestimation magnitudes sim-
+ilar to PFP, and the gap between LightPFP and PFP
+is small across temperatures despite LightPFP’s some-
+what larger force MAE. This suggests that the modest
+force-error increase introduced by distillation has only
+
+7
+a limited impact on this property. Arrhenius ﬁts yield
+activation energies of 0.523 eV (DFT), 0.462 eV (PFP),
+0.490 eV (LightPFP), 0.407 eV (MACE) and 0.465 eV
+(MTP-DFT). LightPFP’s activation energy is, in fact,
+the closest to the DFT value among the MLIPs consid-
+ered. While some of this agreement may be incidental
+within statistical and methodological uncertainties, it in-
+dicates that, at least for this system, errors introduced by
+model distillation are not the dominant source of discrep-
+ancy in property-level predictions. Instead, diﬀerences
+arising from simulation setup (thermostatting, sampling
+length) and the DFT reference itself can be comparable
+to or larger than the residual model error.
+D. High entropy alloy
+This example focuses on high entropy alloys (HEAs),
+speciﬁcally the Cantor alloy with a face-centered cubic
+(FCC) lattice. The composition is 20\% each of Al, Co,
+Cr, Fe, and Ni. HEAs have attracted signiﬁcant attention
+due to their exceptional mechanical properties. However,
+their complex multi-element nature poses challenges for
+training MLIPs. In the following, we train MLIPs appli-
+cable not only to bulk HEA but also to interfaces and
+grain boundaries.
+As in the previous example, we evaluate the same four
+MLIP usage strategies—PFP, MACE, LightPFP, and
+MTP-DFT—with the same meanings as deﬁned above.
+For LightPFP and MTP-DFT, we construct training
+datasets using an identical sampling workﬂow. Because
+equiatomic AlCoCrFeNi high-entropy alloys are substitu-
+tional solid solutions without a unique ordered conﬁgura-
+tion, each lattice site experiences a wide variety of local
+chemical environments. To eﬃciently sample this diver-
+sity, we adopt a random-substitution protocol: starting
+from an fcc Al host, each lattice site is independently
+assigned one of Al, Co, Cr, Fe, Ni with equal probabil-
+ity (≈20at.\% per element), and the resulting structures
+are sampled using PFP-driven molecular dynamics. This
+procedure is repeated across multiple starting cells to di-
+versify the dataset. The initial pool includes fcc bulk
+crystals, surface slabs with Miller indices less than 4, and
+coincidence-site-lattice (CSL) grain boundaries with low
+Σ(<10). For LightPFP, PFP-driven MD sampling takes
+26 hours to generate 9,638 structures (1,356,616 atoms),
+followed by 1 hour of model training (27 hours total).
+For the DFT-based baseline (MTP-DFT), we use the
+same PFP-driven sampling strategy but label a smaller
+set—1,012 conﬁgurations (60,360 atoms), including sur-
+faces and grain boundaries relevant to the intended ap-
+plication—by single-point DFT calculations. Some con-
+ﬁgurations (e.g., the (3 1 1) slab with at least 144 atoms)
+require relatively large cells, making DFT labeling ex-
+pensive due to the nominal cubic scaling of Kohn–Sham
+DFT. The DFT calculations took 637 hours on a single
+GPU; by simple extrapolation, fully ab initio MD sam-
+pling would require on the order of 60,000 hours, i.e.,more than three orders of magnitude slower than the
+LightPFP route. These results again highlight the ad-
+vantage of using a universal potential for rapid, low-cost
+data collection.
+Runtime benchmarks on an NVIDIA V100 (16 GB)
+show that LightPFP and MTP-DFT achieve an infer-
+ence speed of 9.8×10−7s/step/atom—66 ×faster than
+PFP (6.5×10−5s/step/atom) and 249 ×faster than
+MACE ( 2.4×10−4s/step/atom). The maximum sys-
+tem size that ﬁts on a single GPU is 716,800 atoms for
+LightPFP/MTP-DFT, compared to 13,824 for PFP (52 ×
+smaller) and 1,792 for MACE (400 ×smaller). When
+construction cost is considered, LightPFP oﬀers the best
+overall trade-oﬀ: it pairs the fastest inference with a 27-
+hour build, which is orders of magnitude cheaper than
+the 60,000 hours required for MTP-DFT.
+Using DFT forces as ground truth on a held-out test
+set, the force MAEs follow the same ordering observed
+previously: PFP (0.103 eV/Å) < MTP-DFT (0.123
+eV/Å) < LightPFP (0.134 eV/Å) < MACE (0.184 eV/Å).
+This again shows that the distilled LightPFP incurs a
+modest accuracy penalty relative to its teacher and a
+DFT-trained baseline, yet retains substantially higher ef-
+ﬁciency.
+We assess the accuracy of the four MLIPs on key prop-
+erties of AlCoCrFeNi, using DFT as the reference: the
+equation of state (EOS), elastic constants, surface forma-
+tion energies, and grain-boundary (GB) formation ener-
+gies. Unless otherwise noted, results are averaged over
+multiple random elemental arrangements to account for
+chemical disorder, and numerical comparisons are sum-
+marized in Table III.
+We began with the equation of state. Starting from
+a relaxed 256-atom bulk cell, we varied the lattice con-
+stant by ±5\%, relaxed atomic positions at ﬁxed vol-
+ume, and ﬁtted the resulting energy–volume data with a
+Birch–Murnaghan EOS to obtain the equilibrium volume
+and bulk modulus. PFP and LightPFP closely reproduce
+the DFT energy–volume curve. MACE also follows the
+DFT curve but exhibits small systematic deviations in
+the ﬁtted parameters. By contrast, MTP-DFT underes-
+timates the equilibrium volume by approximately 2.5\%,
+which may reﬂect limited coverage of relevant local envi-
+ronments in its DFT-labeled training set.
+Then, the elastic tensor, bulk, Young’s, and shear mod-
+uli are computed with the stress–strain methodology41
+using the same bulk structure. PFP provides the clos-
+est agreement with DFT with average error of 7.2 GPa.
+LightPFP (10.65 GPa) tracks PFP closely. MTP-DFT
+(12.55 GPa) generally remains comparable to LightPFP
+for these mechanical properties, while MACE shows more
+pronounced deviations, 23.35 GPa. Overall, the spread
+among PFP, LightPFP, and MTP-DFT is modest for
+elasticity, whereas MACE underperforms on this task.
+Since the low-index surfaces were included in training
+dataset, we evaluated higher-index surfaces with Miller
+index > 3 to probe the performance of MLIPs in surface
+formation energy calculation. The surface formation en-
+
+8
+TABLE III: Comparison of DFT and MLIPs on properties of AlCoCrFeNi high-entropy alloy
+Property DFT PFP LightPFP MACE MTP-DFT
+Equation of State
+Volume (Å3/atom) 11.58 11.51 11.51 11.48 11.29
+Bulk modulus (GPa) 165.64 165.66 164.35 159.18 162.27
+Mechanical Properties (GPa)
+C11 195.2 202.5 196.3 177.2 197.2
+C22 211.4 206.9 203.3 183.5 202.7
+C33 197.5 206.7 204.3 182.7 203.1
+C12 140.9 145.9 151.7 145.9 153.3
+C13 142.9 152.9 156.6 148.3 157.6
+C23 131.1 137.9 144.9 141.3 148.2
+C44 116.5 109.4 106.2 80.2 103.7
+C55 124.0 114.2 110.6 84.6 107.1
+C66 120.3 112.9 109.9 83.9 106.8
+Bulk modulus 159.23 165.45 167.81 157.14 169.02
+Shear modulus 69.99 65.79 60.42 45.05 58.54
+Young’s modulus 183.14 174.27 161.84 123.36 157.44
+Average Error – 7.20 10.65 23.35 12.55
+Surface Energy (eV/Å2)
+(4, 1, 0) 0.127 0.136 0.133 0.121 0.126
+(4, 1, 1) 0.170 0.171 0.165 0.167 0.168
+(4, 2, 1) 0.142 0.149 0.148 0.134 0.145
+(4, 3, 0) 0.139 0.144 0.143 0.137 0.143
+(4, 3, 2) 0.137 0.143 0.145 0.126 0.142
+(4, 4, 1) 0.148 0.153 0.153 0.146 0.154
+(4, 4, 3) 0.171 0.178 0.175 0.174 0.176
+Average Error – 0.0058 0.0053 0.0052 0.0036
+Grain Boundary Energy (eV/Å2)
+Σ13 22.62/[1 0 0] 0.0559 0.0621 0.0578 0.0424 0.0523
+Σ15 48.19/[1 2 0] 0.0794 0.0809 0.0787 0.0602 0.0825
+Σ13 147.80/[1 1 1] 0.0378 0.0300 0.0294 0.0206 0.0268
+Σ13 67.38/[1 0 0] 0.0584 0.0617 0.0563 0.0332 0.0504
+Σ11 129.52/[1 1 0] 0.0955 0.0735 0.0771 0.0670 0.0737
+Average Error – 0.0081 0.0063 0.0207 0.0095
+ergy was computed as:
+γsurf=Esurf−nsurf
+nbulkEbulk
+2Asurf(1)
+whereEsurfis the energy of a slab with two surfaces,
+Ebulkis the energy of the bulk HEA, nsurfandnbulkare
+the atom counts in the surface and bulk structures, and
+Asurfis the surface area. All four MLIPs achieve high ac-
+curacy, with average absolute errors below 0.006 eV/Å2
+relative to DFT. On this task the inter-model diﬀerences
+of average error are very small among PFP, LightPFP
+and MACE (0.0052-0.0058 eV/Å2); while MTP-DFT
+(0.0036 eV/Å2) is marginally closer to DFT.
+Several CSL grain boundaries with Σ> 10 are selected
+for testing the MLIPs in GB formation energy. The GB
+formation energy was computed as:
+γGB=EGB−nGB
+nbulkEbulk
+2AGB(2)
+whereEGBandEbulkare the energy of GB and bulk
+structures, nGBandnbulkare their atoms counts, and
+AGBis the grain boundary area. LightPFP, PFP andMTP-DFT reproduce the GB formation energy with
+modest accuracy with an average error < 0.01 eV/Å2,
+whereas MACE shows larger deviations.
+Across EOS, elasticity, surface energies, and GB en-
+ergies, the overall spread among PFP, LightPFP, and
+MTP-DFT is small, and no single model dominates all
+properties. Importantly, despite its slightly larger force
+MAE relative to PFP and MTP-DFT, LightPFP does
+not exhibit a clear disadvantage in property-level predic-
+tions for this materials. This mirrors the earlier example,
+Li6PS5Cl: modest diﬀerences in force MAE do not nec-
+essarily translate into large discrepancies in computing
+materials properties, which can be comparably inﬂuenced
+by factors such as ﬁnite-size eﬀects, and simulation set-
+tings. Together with its substantially lower construction
+cost and faster inference, these results support model dis-
+tillation from a strong universal potential as a practical
+and accurate route for property calculations in complex,
+chemically disordered materials.
+
+9
+E. Dry etching of SiO 2: application of active learning
+In this example, we consider a more demanding ap-
+plication: dry etching of the SiO 2(100) surface by HF.
+Dry etching is a critical step in semiconductor process-
+ing, yet atomistic simulations are particularly challeng-
+ing. Device-scale simulations require tens to hundreds
+of nanometers, while the process itself couples complex
+surface reactions with intense atomic interactions under
+high-energy bombardment. These demands place strin-
+gent requirements on the accuracy and robustness of
+MLIPs. Here, we combine model distillation with active
+learning to rapidly construct a LightPFP model tailored
+to this task, using PFP as the high-ﬁdelity teacher for
+data generation and selection. Given the prohibitive cost
+of DFT-based active learning in this setting, we do not
+construct or compare DFT-labeled MTP models; like-
+wise, we focus on the PFP–LightPFP pipeline rather
+than benchmarking additional universal models, as our
+goal is to demonstrate applicability rather than relative
+speed/accuracy.
+We brieﬂy outline the active learning workﬂow. An ini-
+tial dataset was collected via PFP-driven sampling, cov-
+ering SiO 2bulk and (100) surface, HF gas, and represen-
+tative products such as SiF 4and H 2O. Dataset collection
+took 4.5 hours and was used to train an initial LightPFP
+model. As expected, the initial model was insuﬃcient for
+dry-etching simulation, having not yet learned the inter-
+actions arising from high-velocity HF impacts on SiO 2.
+We then entered an iterative active-learning loop in which
+the current LightPFP model drives reactive MD of the
+etching process: a HF molecule are inserted above the
+SiO2surface with kinetic energies randomly sampled in
+the range from 20 eV to 80 eV and directed perpendic-
+ular to the surface; trajectories are propagated in the
+NVE ensemble for 200 fs with a 0.2 fs timestep to resolve
+high-energy collisions, followed by 1,000 fs of NVT dy-
+namics (1 fs/step) to cool to 300 K. This insertion cycle
+is repeated 100–200 times per iteration. To select in-
+formative conﬁgurations, we directly compare LightPFP
+and PFP predictions and ﬂag frames with large discrep-
+ancies; the selected structures are labeled by PFP and
+used to re-train LightPFP. To accelerate updates, each
+training step is capped at 0.5 hours. This is feasible be-
+cause we warm-start from a pretrained student MTP, so
+ﬁne-tuning converges rapidly to a satisfactory model for
+the next MD round. We perform 15 iterations of data
+collection and model update, completing the end-to-end
+process within 16 hours. After the active-learning loop,
+all collected datasets are pooled and used for a longer
+ﬁnal training run to obtain a more reliable production
+LightPFP model. In total, the wall-clock time to build
+the LightPFP MLIP for this application is approximately
+24 hours.
+To validate the reliability of the LightPFP model ob-
+tained through active learning, we ﬁrst examine a repre-
+sentative surface reaction. As shown in Fig. 7, an HF
+molecule approaches a dangling OH group on a SiO 2
+FIG. 7: Reaction pathway from NEB calculation for the
+reaction of an HF molecule with a SiO 2surface during
+dry etching, computed using PFP and LightPFP.
+Atomic structures of the initial state (IS), transition
+state (TS), and ﬁnal state (FS) are shown.
+cluster, displaces an H 2O molecule, and forms an Si–F
+bond. We computed the reaction pathway and barri-
+ers using the nudged elastic band (NEB) method with
+both PFP and LightPFP. The initial state (IS), transi-
+tion state (TS), and ﬁnal state (FS) structures—shown as
+insets—agree closely between the two models, indicating
+a consistent reaction pathway. The forward/backward
+barriers are 1.029/1.561 eV for PFP and 0.844/1.560
+eV for LightPFP. For reference, literature DFT barri-
+ers are 0.929/1.424 eV, while ReaxFF yields 1.848/2.706
+eV.42LightPFP’s deviations from DFT are 0.085 eV (for-
+ward) and 0.136 eV (backward), comparable to PFP’s
+deviations of 0.100 eV and 0.137 eV, and far smaller
+than ReaxFF’s errors. Notably, the training data did
+not include NEB paths or SiO 2clusters; LightPFP’s
+agreement arises from exposure to related conﬁgurations
+generated during the active-learning MD, demonstrating
+useful transferability.
+We further assess performance in the MD simulation
+of dry etching. Using the same setup, we run simula-
+tions with HF incidence energies of 20 eV, 40 eV, and
+60 eV. Figure 8shows the number of Si and O atoms
+removed during etching. LightPFP and PFP produce
+highly consistent etch yields and energy dependences
+across all three conditions, indicating that the distilled
+model tracks its teacher closely in this complex reactive
+MD setting without noticeable behavioral divergence.
+To probe scalability and practical applicability, we per-
+formed a near feature-scale reactive MD simulation using
+LightPFP. The simulation cell measured 10.06 ×10.06
+×20.00 nm along the a, b, and c axes, and contained
+72,000 Si and O atoms in a SiO 2(100) slab. To emulate
+focused dry etching, HF molecules were accelerated to a
+kinetic energy of 40 eV and directed toward the surface,
+with impact points restricted to a 2 ×2 nm patch. Over
+
+10
+FIG. 8: Cumulative number of removed atoms versus time during HF dry etching of a SiO 2surface, from molecular
+dynamics simulations using PFP and LightPFP at diﬀerent incident kinetic energies. (a) Si atoms; (b) O atoms.
+FIG. 9: Surface morphology of SiO 2during dry etching at a kinetic energy of 40 eV, obtained from a large-scale
+molecular dynamics simulation with LightPFP. (a) Top view after 0.5 ns of etching; the etched region is the central
+2×2nm square. Longitudinal cross-sections through the etched region at (b) t = 0.05 ns, (c) t = 0.25 ns, and (d)
+t = 0.5 ns.
+a total simulation time of 0.5 ns, 1,000 HF molecules
+were injected. Figure 9illustrates the evolution of the
+surface morphology under these conditions. By approx-
+imately 0.05 ns, atoms at the bombarded region begin
+to be removed. A recessed pit is clearly visible by 0.25
+ns, and by 0.5 ns the crater reaches a depth of about 2
+nm. Because the MD timescale is necessarily short, the
+HF injection ﬂux used here is higher than in typical ex-
+periments; thus absolute etch rates are not directly com-
+parable. Nevertheless, the sequence of material removal
+and the development of a localized crater, demonstrating
+that LightPFP remains stable and predictive in large,
+high-ﬂux reactive simulations. These large-scale simu-
+lations pave the way for feature-scale studies, including
+aspect-ratio eﬀects, lateral etch selectivity, and the inter-
+play between energy, dose, and local morphology during
+pattern transfer.43F. Melting point of MgO: application of few-shot transfer
+learning
+When the teacher model (i.e., the universal potential)
+exhibits systematic errors in a given system, a distilled
+student will generally inherit those deﬁciencies. To ad-
+dress this limitation, we explore a transfer-learning strat-
+egy in which a small amount of high-ﬁdelity DFT data is
+used to correct the distilled model and enhance its accu-
+racy. We validate this idea on the melting point of MgO.
+It is well known that DFT with the PBE functional sig-
+niﬁcantly underestimates MgO’s melting point relative
+to experiment, whereas higher-level functionals such as
+r2SCAN yield more accurate predictions. Because both
+the PFP model we used and MACE were trained on PBE-
+based datasets, they may be less accurate for modeling
+MgO melting point.
+We ﬁrst follow our standard distillation workﬂow to
+construct a LightPFP model using PFP-sampled train-
+ing data, including crystalline MgO, liquid-phase MgO,
+and solid–liquid interface conﬁgurations. Data collection
+
+11
+and initial model training required 7.5 and 1.0 hours, re-
+spectively. We then estimated the melting point with
+this original LightPFP. Starting from a solid–liquid co-
+existence slab, we performed MD at 2600 K, 2650 K,
+2700 K, 2750 K, 2800 K, 2850 K, and 2900 K, and moni-
+tored whether the crystalline region advanced or receded.
+Progress was quantiﬁed by the local octahedral order pa-
+rameterqoct.44which approaches 1.0 for Mg/O-centered
+octahedra in crystalline MgO. Figure 10(a) shows the
+fraction of atoms with qoct> 0.25 versus time. At low
+temperatures (e.g., 2600 K), this fraction increases to-
+ward 1.0, indicating solidiﬁcation; at higher temperatures
+it decreases, indicating melting. At approximately 2700
+K, the fraction remains nearly constant over the trajec-
+tory, suggesting solid–liquid equilibrium. As expected
+for a PBE-level model, this melting point is substantially
+below the experimental range from 3073 to 3250 K and
+consistent with prior PBE-trained MLIP studies.45,46
+To improve accuracy, we applied few-shot trans-
+fer learning from PBE to r2SCAN. Using the original
+LightPFP as a starting point, we sampled small MgO
+structures (64 atoms each) from MD and selected 10 con-
+ﬁgurations for r2SCAN single-point calculations. Dur-
+ing transfer learning, we froze the LightPFP radial-basis
+representation and ﬁne-tuned only the readout network
+to minimize energy, force, and stress errors against the
+r2SCAN labels. This procedure adapts the model to the
+r2SCAN potential energy surface. Freezing the represen-
+tation mitigates overﬁtting and catastrophic forgetting
+in the few-shot regime while reducing compute. The
+r2SCAN calculations took 1.25 hours, and ﬁne-tuning
+required 0.5 hours. Re-evaluating with the few-shot
+transfer-learned LightPFP under the same MD protocol,
+we obtained an estimated melting point of 3125 K, in ex-
+cellent agreement with experiment;45see Fig. 10(b). The
+end-to-end wall-clock time was 10.25 hours. By compari-
+son, building an r2SCAN-level MLIP in the conventional
+way would require r2SCAN labels for thousands of struc-
+tures; because r2SCAN is several times slower than PBE,
+the speedup of LightPFP at the r2SCAN level is even
+more pronounced.
+This case illustrates a general recipe for overcoming
+teacher limitations. Distill a fast, task-adapted student
+from a universal potential for broad coverage and eﬃ-
+ciency; then, wherever the teacher is biased or under-
+trained, apply few-shot transfer learning using a higher-
+ﬁdelity dataset to correct the student. With minimal
+additional labeling, the student can surpass the teacher
+for the property of interest. This strategy is agnostic to
+the source of teacher error and is readily extensible to
+other universal models and materials systems.
+III. DISCUSSION
+We introduced LightPFP, a knowledge distillation
+framework that resolves the fundamental trade-oﬀ be-
+tween transferability and eﬃciency in Machine learn-ing interatomic potentials (MLIPs). By leveraging high-
+ﬁdelity universal MLIPs (u-MLIPs) as computational en-
+gines for data generation—rather than relying on expen-
+sive DFT calculations—we enable rapid development of
+lightweight, task-speciﬁc MLIPs (ts-MLIPs) with mini-
+mal accuracy loss. Demonstrations using Li 6PS5Cl solid-
+state electrolytes and high-entropy alloys show that our
+distillation strategy reduces ts-MLIP development time
+by three orders of magnitude compared to conventional
+DFT-based approaches. The resulting distilled ts-MLIPs
+achieve inference speeds one to two orders of magni-
+tude faster than u-MLIPs due to their streamlined ar-
+chitecture, while maintaining comparable accuracy in
+critical calculations such as diﬀusion activation energies
+and surface/grain boundary energies. For more com-
+plex systems, we demonstrate the framework’s versatil-
+ity through reactive ionic etching of SiO 2surfaces, where
+combining model distillation with active learning success-
+fully handles intricate chemical processes. The distilled
+ts-MLIP accurately reproduces the teacher model’s pre-
+dictions for both chemical reactions and etching dynam-
+ics in molecular dynamics simulations. Finally, we show
+how transfer learning can enhance distilled model accu-
+racy when u-MLIP precision is insuﬃcient. Using MgO
+melting point prediction as a case study, we improved the
+predicted melting temperature from 2700 K to 3125 K
+using only 10 additional high-accuracy DFT data points,
+achieving excellent agreement with experimental values
+of 3100-3200 K. We anticipate that this approach will
+generalize to other universal potentials, providing a scal-
+able, data-eﬃcient foundation for accurate, production-
+scale materials simulations.
+For brevity, we present only four representative exam-
+ples in the main text. In supplementary information II,
+we present 11 additional examples of complex simula-
+tions achievable by LightPFP, which might be of interest
+to readers
+IV. METHODS
+A. Density functional theory
+Density functional theory (DFT) calculations were em-
+ployed for three main purposes: (1) generating training
+data for machine learning interatomic potentials (MLIPs)
+using conventional approaches; (2) evaluating key ma-
+terial properties such as interface energies to bench-
+mark the accuracy of various MLIPs, including u-MLIPs
+and ts-MLIPs; and (3) producing datasets based on the
+r2SCAN exchange–correlation (xc) functional for transfer
+learning in LightPFP.
+All calculations were performed using spin-polarized
+DFT as implemented in the Vienna ab initio Simula-
+tion Package (VASP, version 6.4.0) with GPU acceler-
+ation. The projector augmented-wave (PAW) method
+and a plane-wave basis set with a kinetic-energy cutoﬀ
+of 520 eV were employed. For the ﬁrst two purposes,
+
+12
+FIG. 10: Evolution of the fraction of atoms with high local structural order ( qoct> 0.25) during molecular dynamics
+simulations at diﬀerent temperatures. (a) LightPFP, (b) LightPFP after few-shot transfer learning
+the Perdew–Burke–Ernzerhof (PBE) generalized gradi-
+ent approximation was adopted. The pseudopotentials,
+cutoﬀ energies, and k-point meshes followed the settings
+of the PFP dataset,2corresponding to a k-point density
+of approximately 1000 k-points per reciprocal atom.
+For the third purpose, calculations were performed
+using the r2SCAN meta-GGA xc functional within the
+same VASP framework. The functional was activated
+through the Meta-GGA option, with all other compu-
+tational parameters—such as the 520 eV kinetic-energy
+cutoﬀ—kept consistent with the PBE calculations to en-
+sure compatibility. The Brillouin zone was sampled using
+a k-point grid generated with a KSPACING parameter
+of0.5Å−1, ensuring well-converged total energies.
+B. Preferred potential (PFP)
+PFP is a commercial universal interatomic potential
+available via the Matlantis atomic simulation platform.47
+It is trained on a high-quality DFT dataset based on
+PBE,48r2SCAN49andωB97X-D50exchange-correlation
+(xc) functionals. The highly disordered training struc-
+tures, e.g. high temperature MD frames, are included in
+the dataset to guarantee its reliability in a wide range of
+applications.
+C. Moment tensor potential (MTP)
+
+\section{Basis function}
+
+Moment tensor potential (MTP) employs a mathe-
+matically rigorous descriptor system based on invari-
+ant moment tensors that encode atomic environments.25
+In MTP, energy can be calculated by the sum of the
+atomic energy functions of each atom iin the structure:E=/summationtext
+iVi, where Vi=/summationtext
+αξαBα(ni).ξαdenotes a
+learnable coeﬃcient of MTP, Bαdenotes a basis func-
+tion and nidenotes a set of rij, a relative coordinate
+position of atom ito its neighbors. Each basis function
+Bαcomprises of matrix contractions of moment descrip-
+torsMµ,ν, whereµandνare non-negative integers. The
+moment descriptor Mµ,νfor atom iis deﬁned as:
+Mµ,ν(ni) =/summationdisplay
+jfµ(rij)rij⊗rij⊗···⊗rij/bracehtipupleft/bracehtipdownright/bracehtipdownleft /bracehtipupright
+νtimes
+whererij=rj−riis the relative position vector to neigh-
+bor j within cutoﬀ radius Rcut, “⊗” denotes a tensor outer
+product. The function fµdescribed a radial part depend-
+ing onµis expressed as
+fµ(|rij|,zi,zj) =NQ/summationdisplay
+β=1c(β)
+µ,zi,zjQβ(|rij|)
+wherec(β)
+µ,zi,zjis a learnable parameter, zindicates the
+atomic type, the radial function Qβ(|rij|)is the combi-
+nation of Chebyshev polynomials of the ﬁrst kind and
+cutoﬀ function, and NQis the number of polynomials.
+Moment descriptors are contracted to form
+rotationally-invariant basis functions Bα(ni)that
+preserve SO(3) symmetry, enabling accurate repre-
+sentation of complex many-body interactions. The
+formulation of MTP achieves high data eﬃciency—basis
+functions span a complete polynomial space while
+avoiding explicit angular dependence, enabling accurate
+ﬁts with small training sets.25,37With training data,
+we ﬁt MTP to learn the parameters ξ=\{ξi,...,ξnB\},
+wherenBis the number of basis, and c=\{c(β)
+µ,zi,zj\},
+where the number of coeﬃcients ncdepends on number
+offµ, element pairs including the pair of itself, and NQ:
+nc=nfµ×nelem-pair×NQ.
+
+13
+
+\section{Neural network readout}
+
+We extend the standard MTP architecture by replac-
+ing its linear energy predictor with a neural network
+(NN) employing the multi-layer perceptron architecture
+parameterized by θ,Mθ. The modiﬁed energy expression
+becomes:
+ENN-MTP
+i=Mθ(\{Bα(ni)\}m
+α=1) (3)
+whereθdenotes trainable weights, and \{Bα\}are in-
+variant descriptors from the preceding tensor layer. This
+hybrid architecture introduces controlled nonlinearity to
+enhance the capability to capture subtle correlations in
+potential energy surfaces (PES) that can be diﬃcult for
+linear projections to capture.
+D. Pretrained student models
+We pretrain the MTP model using the large, di-
+verse DFT dataset used for the training of u-MLIP,
+PFP. The dataset includes both equilibrium and non-
+equilibrium structures, enabling broad transferabil-
+ity.Takamoto et al.2Unlike the universal PFP graph
+neural network, MTPs have limited capacity and are typ-
+ically material-speciﬁc, so we do not ﬁt all data jointly.
+Instead, we adopt Reptile meta-learning38to obtain an
+initialization that adapts rapidly to individual systems:
+the dataset is split into 12 tasks by structure type; at
+each meta-iteration we sample one task, train for a sin-
+gle epoch with Adam51where learning rate is 1e−3,
+and batch size is 256), then apply a meta-update with
+β= 0.5. We run 100 meta-iterations until energies,
+forces, and stresses stabilize across tasks. The pretrained
+model has a large parameter set due to the large number
+of supported elements. Owing to MTP’s modularity, pa-
+rameters can be subset by elements at inference or ﬁne-
+tuning. This initialization acts as a strong prior from
+diverse chemistry, improving robustness, reducing over-
+ﬁtting, and speeding convergence when the target dataset
+is small or undersampled. The details of pretrained mod-
+els can be found in supplementary information I.
+E. Training method
+For all LightPFP models trained in the applications de-
+scribed in Section II, datasets were split 90\%/10\% into
+training and validation. The validation set was used both
+for model selection (choosing the checkpoint with the
+lowest validation loss) and for reporting validation er-
+rors. The training objective combined energy, force, and
+stress terms:
+L=α·Lenergy+β·Lforce+γ·Lstress (4)whereLenergy is the mean squared error (MSE) of the
+energy per atom, Lforceis the MSE of the Cartesian force
+components on each atom (x, y, z), and Lstress is the
+MSE of the stress tensor components. The coeﬃcients
+α,βandγweight the energy, force, and stress losses,
+respectively.
+Optimization was performed using Adam51with a
+batch size of 128, following a three-stage training pro-
+cedure. In the ﬁrst stage, the loss coeﬃcients for energy,
+forces, and stress were set to (10−5,10,10−5). In the sec-
+ond stage, they were adjusted to (1,0.1,10). In the third
+stage, the loss coeﬃcients were automatically determined
+to balance the three losses. Speciﬁcally, we ﬁrst com-
+puted the total validation loss of the second-stage model
+using the stage-two coeﬃcients as loss weight. The coef-
+ﬁcient for the energy loss was then calculated as the total
+weighted validation loss divided by three and further di-
+vided by the energy loss from stage two. The coeﬃcients
+for forces and stress were calculated analogously, each us-
+ing their respective loss from stage two. The three-stage
+procedure yielded faster convergence than conventional
+training method without variation of coeﬃcients. A de-
+tailed comparison is provided in supplementary informa-
+tion I.
+A linear warmup learning rate scheduler was applied,
+increasing the learning rate from zero to its stage-speciﬁc
+maximum during the ﬁrst 20\% of epochs in each stage,
+and then linearly decaying it to approach zero by the
+ﬁnal epoch. The learning rates for stage 1, stage 2, and
+stage 3 were set to 0.1, 0.01, and 0.01, respectively.
+V. DATA AVAILABILITY
+The datasets generated and analysed during the
+current study are available from public repositories.
+The DFT training datasets have been deposited on
+the Materials Cloud under the accession number DOI:
+XX.XXXXX/materialscloud:XXXXXX (to be assigned).
+The PFP-labelled datasets used for model training and
+evaluation are available in the accompanying GitHub
+repository https://github.com/pfn-attic/light-pfp-paper.
+All other data supporting the ﬁndings of this study are
+available from the corresponding author upon reasonable
+request.
+VI. CODE AVAILABILITY
+All codes used for model training, and atomistic sim-
+ulations are available in the LightPFP examples GitHub
+repository https://github.com/pfn-attic/light-pfp-paper.
+The implementation depends on the PFP and LightPFP
+packages, which are components of the Matlantis com-
+mercial platform developed by Preferred Networks, Inc.
+Access to these packages requires a valid Matlantis li-
+cense.
+
+14
+VII. ACKNOWLEDGEMENTS
+The authors are grateful to Tasuku Onodera, Takashi
+Kojima, Masanao Goto, Yuta Tanaka, and Yuji Hakozaki
+(ENEOS Holdings, Inc.) for their valuable suggestions
+during the development of LightPFP. We also thank
+Chikashi Shinagawa (Preferred Networks, Inc.) for in-
+sightful discussions regarding the DFT calculation setup.
+1D. Ceperley and B. Alder, “Ground-state of the electron-gas by
+a stochastic method,” Phys. Rev. Lett. 45, 566–569 (1980).
+2S. Takamoto, C. Shinagawa, D. Motoki, K. Nakago, W. Li, I. Ku-
+rata, T. Watanabe, Y. Yayama, H. Iriguchi, Y. Asano, et al.,
+“Towards universal neural network potential for material discov-
+ery applicable to arbitrary combination of 45 elements,” Nature
+Communications 13, 2991 (2022).
+3C. Chen and S. P. Ong, “A universal graph deep learning inter-
+atomic potential for the periodic table,” Nature Computational
+Science 2, 718–728 (2022).
+4B. Deng, P. Zhong, K. Jun, J. Riebesell, K. Han, C. J. Bartel,
+and G. Ceder, “CHGNet as a pretrained universal neural net-
+work potential for charge-informed atomistic modelling,” Nature
+Machine Intelligence 5, 1031–1041 (2023).
+5I. Batatia, D. P. Kovacs, G. Simm, C. Ortner, and G. Csányi,
+“MACE: Higher order equivariant message passing neural net-
+works for fast and accurate force ﬁelds,” Advances in neural in-
+formation processing systems 35, 11423–11436 (2022).
+6I. Batatia, P. Benner, Y. Chiang, A. M. Elena, D. P. Kovács,
+J. Riebesell, X. R. Advincula, M. Asta, M. Avaylon, W. J. Bald-
+win,et al., “A foundation model for atomistic materials chem-
+istry,” arXiv preprint arXiv:2401.00096 (2023).
+7S. Kong, N. Matsui, S. Hori, M. Hirayama, K. Mori, T. Saito,
+R. Kanno, and K. Suzuki, “Exploration of lithium-ion conduc-
+tors based on local coordination environments using crystallo-
+graphic site ﬁngerprints,” Journal of the American Chemical So-
+ciety (2025).
+8Y. Hinuma and M. Kitta, “Facile formation of two-phase domains
+in a single crystalline li7–x ti5o12 particle,” ACS Applied Energy
+Materials (2025).
+9S. Narumi, H. E. Otal, T. Q. Nguyen, M. Koyama, and N. Zettsu,
+“Tailoring the room-temperature miscibility gap in ordered spinel
+lini 0.5 mn 1.5 o 4 cathodes by multi-element doping,” Journal
+of Materials Chemistry A (2025).
+10B. G. Son, C. Kwon, Y. Cho, T. Jang, H. R. Byon, S. Kim, and
+E. S. Cho, “Constructing reversible li deposition interfaces by tai-
+loring lithiophilic functionalities of a heteroatom-doped graphene
+interlayer for highly stable li metal anodes,” ACS Applied Mate-
+rials \& Interfaces 16, 32259–32270 (2024).
+11O. Kwon, T. Y. Kim, T. Kim, J. Kang, S. Jang, H. Eom,
+S. Choi, J. Shin, J. Park, M.-L. Seol, et al., “Intelligent stress-
+adaptive binder enabled by shear-thickening property for silicon
+electrodes of lithium-ion batteries,” Advanced Energy Materials
+14, 2304085 (2024).
+12H. Du, Y. Dong, Q.-J. Li, R. Zhao, X. Qi, W.-H. Kan, L. Suo,
+L. Qie, J. Li, and Y. Huang, “A new zinc salt chemistry for
+aqueous zinc-metal batteries,” Advanced Materials 35, 2210055
+(2023).
+13T. Shimada, P. M. Usov, Y. Wada, H. Ohtsu, T. Watanabe,
+K. Adachi, D. Hashizume, T. Matsumoto, and M. Kawano,
+“Long time CO2 storage under ambient conditions in isolated
+voids of a porous coordination network facilitated by the “magic
+door” mechanism,” Advanced Science 11, 2307417 (2024).
+14J. Koh, C. Kwon, H. Kim, E. Lee, A. Machida, Y. Nakahira,
+Y. J. Hwang, K. Sakaki, S. Kim, and E. S. Cho, “Defect-driven
+evolution of oxo-coordinated cobalt active sites with rapid struc-
+tural transformation for eﬃcient water oxidation,” ACS nano 18,
+28986–28998 (2024).
+15Y. Hinuma, “Neural network potential molecular dynamics simu-
+lations of (La, Ce, Pr, Nd) 0.95 (Mg, Zn, Pb, Cd, Ca, Sr, Ba) 0.05F2. 95,” The Journal of Physical Chemistry B 128, 12171–12178
+(2024).
+16A. Miura, K. Muraoka, K. Maki, S. Kawaguchi, K. Hikima,
+H. Muto, A. Matsuda, I. Yamane, T. Shimada, H. Ito, et al.,
+“Stress-induced martensitic transformation in Na3YCl6,” Jour-
+nal of the American Chemical Society 146, 25263–25269 (2024).
+17K. Watanabe, T. Higo, K. Saegusa, S. Matsumoto, H. Sampei,
+Y. Isono, A. Shimojuku, H. Furusawa, and Y. Sekine, “Oxidative
+dehydrogenation of ethane combined with co2 splitting via chem-
+ical looping on in2o3 modiﬁed with ni–cu alloy,” ACS Catalysis
+15, 5876–5885 (2025).
+18T. Honbo, Y. Ono, K. Suetsugu, M. Hara, A. Taborosi, K. Aoki,
+S. Nagano, M. Koyama, and Y. Nagao, “Eﬀects of alkyl side
+chain length on the structural organization and proton conduc-
+tivity of sulfonated polyimide thin ﬁlms,” ACS Applied Polymer
+Materials 6, 13217–13227 (2024).
+19K. Hisama, K. V. Bets, N. Gupta, R. Yoshikawa, Y. Zheng,
+S. Wang, M. Liu, R. Xiang, K. Otsuka, S. Chiashi, et al., “Molec-
+ular dynamics of catalyst-free edge elongation of boron nitride
+nanotubes coaxially grown on single-walled carbon nanotubes,”
+ACS nano 18, 31586–31595 (2024).
+20H. Kim, T. Kim, H. K. Chung, J. Jeon, S.-C. Kim, S. O. Won,
+R. Harada, T. Tsugawa, S. Kim, and S. K. Kim, “Sustained
+area-selectivity in atomic layer deposition of ir ﬁlms: Utilization
+of dual eﬀects of o3 in deposition and etching,” Small 20, 2402543
+(2024).
+21S. Jin, C. Kwon, A. Bugaev, B. Karakurt, Y.-C. Lin, L. Savereide,
+L. Zhong, V. Boureau, O. Safonova, S. Kim, et al., “Atom-by-
+atom design of cu/zro x clusters on mgo for co2 hydrogenation
+using liquid-phase atomic layer deposition,” Nature Catalysis 7,
+1199–1212 (2024).
+22H. Kim, H. Kim, W. Kim, C. Kwon, S.-W. Jin, T. Ha, J.-H. Shim,
+S. Park, A. Jamal, S. Kim, et al., “Facile synthesis of nanoporous
+mg crystalline structure by organic solvent-based reduction for
+solid-state hydrogen storage,” Nature Communications 15, 10800
+(2024).
+23T. Ishikawa, Y. Tanaka, and S. Tsuneyuki, “Evolutionary search
+for superconducting phases in the lanthanum-nitrogen-hydrogen
+system with universal neural network potential,” Physical Review
+B109, 094106 (2024).
+24J. Bae, C. Kwon, S.-O. Park, H. Jeong, T. Park, T. Jang, Y. Cho,
+S. Kim, and S. Choi, “Tunable ion energy barrier modulation
+through aliovalent halide doping for reliable and dynamic mem-
+ristive neuromorphic systems,” Science Advances 10, eadm7221
+(2024).
+25I. S. Novikov, K. Gubaev, E. V. Podryabinkin, and A. V.
+Shapeev, “The mlip package: moment tensor potentials with mpi
+and active learning,” Machine Learning: Science and Technology
+2, 025002 (2020).
+26H. Wang, L. Zhang, J. Han, et al., “Deepmd-kit: A deep learn-
+ing package for many-body potential energy representation and
+molecular dynamics,” Computer Physics Communications 228,
+178–184 (2018).
+27A. Musaelian, S. Batzner, A. Johansson, L. Sun, C. J. Owen,
+M. Kornbluth, and B. Kozinsky, “Learning local equivariant rep-
+resentations for large-scale atomistic dynamics,” Nature Commu-
+nications 14, 579 (2023).
+28J. A. Pople, “Nobel lecture: Quantum chemical models,” Reviews
+of Modern Physics 71, 1267 (1999).
+29S. Takamoto, D. Okanohara, Q. Li, and J. Li, “Towards universal
+neural network interatomic potential,” J. Materiomics 9, 447–454
+(2023).
+30J. Li, C. Wang, J. Chang, W. Cai, V. Bulatov, K. Ho, and
+S. Yip, “Core energy and peierls stress of a screw dislocation
+in bcc molybdenum: A periodic-cell tight-binding study,” Phys.
+Rev. B 70, 104113 (2004).
+31H. Tang, B. Xiao, W. He, P. Subasic, A. R. Harutyunyan,
+Y. Wang, F. Liu, H. Xu, and J. Li, “Approaching coupled-
+cluster accuracy for molecular electronic structures with multi-
+task learning,” Nature Computational Science 5, 144–154 (2025).
+
+15
+32J. D. Morrow and V. L. Deringer, “Indirect learning and phys-
+ically guided validation of interatomic potential models,” The
+Journal of Chemical Physics 157(2022).
+33I. Amin, S. Raja, and A. Krishnapriyan, “Towards fast, special-
+ized machine learning force ﬁelds: Distilling foundation models
+via energy hessians,” arXiv preprint arXiv:2501.09009 (2025).
+34J. L. Gardner, D. F. Toit, C. B. Mahmoud, Z. F. Beaulieu,
+V. Juraskova, L.-B. Paşca, L. A. Rosset, F. Duarte, F. Martelli,
+C. J. Pickard, et al., “Distillation of atomistic foundation mod-
+els across architectures and chemical domains,” arXiv preprint
+arXiv:2506.10956 (2025).
+35D. Zhang, X. Liu, X. Zhang, C. Zhang, C. Cai, H. Bi, Y. Du,
+X. Qin, A. Peng, J. Huang, et al., “DPA-2: a large atomic model
+as a multi-task learner,” npj Computational Materials 10, 293
+(2024).
+36S. Takamoto, S. Izumi, and J. Li, “TeaNet: Universal neural
+network interatomic potential inspired by iterative electronic re-
+laxations,” Computational Materials Science 207, 111280 (2022).
+37Y. Zuo, C. Chen, X. Li, Z. Deng, Y. Chen, J. Behler, G. Csányi,
+A. V. Shapeev, A. P. Thompson, M. A. Wood, et al., “Perfor-
+mance and cost assessment of machine learning interatomic po-
+tentials,” The Journal of Physical Chemistry A 124, 731–745
+(2020).
+38A. Nichol, J. Achiam, and J. Schulman, “On ﬁrst-order meta-
+learning algorithms,” arXiv preprint arXiv:1803.02999 (2018).
+39P. Jozwik, W. Polkowski, and Z. Bojar, “Applications of Ni3Al
+based intermetallic alloys—current stage and potential percep-
+tivities,” Materials 8, 2537–2568 (2015).
+40Z. Deng, Z. Zhu, I.-H. Chu, and S. P. Ong, “Data-driven ﬁrst-
+principles methods for the study and design of alkali superionic
+conductors,” Chemistry of Materials 29, 281–288 (2017).
+41M. De Jong, W. Chen, T. Angsten, A. Jain, R. Notestine,
+A. Gamst, M. Sluiter, C. Krishna Ande, S. Van Der Zwaag, J. J.
+Plata, et al., “Charting the complete elastic properties of inor-
+ganic crystalline compounds,” Scientiﬁc data 2, 1–13 (2015).42D. H. Kim, S. J. Kwak, J. H. Jeong, S. Yoo, S. K. Nam, Y. Kim,
+and W. B. Lee, “Molecular dynamics simulation of silicon dioxide
+etching by hydrogen ﬂuoride using the reactive force ﬁeld,” ACS
+omega 6, 16009–16015 (2021).
+43G. S. Oehrlein, S. M. Brandstadter, R. L. Bruce, J. P. Chang,
+J. C. DeMott, V. M. Donnelly, R. Dussart, A. Fischer, R. A.
+Gottscho, S. Hamaguchi, et al., “Future of plasma etching for
+microelectronics: Challenges and opportunities,” Journal of Vac-
+uum Science \& Technology B 42(2024).
+44N. E. Zimmermann, M. K. Horton, A. Jain, and M. Haranczyk,
+“Assessing local structure motifs using order parameters for motif
+recognition, interstitial identiﬁcation, and diﬀusion path charac-
+terization,” Frontiers in Materials 4, 34 (2017).
+45S.-M. Liang and R. Schmid-Fetzer, “Complete thermodynamic
+description of the Mg-Ca-O phase diagram including the Ca-O,
+Mg-O and CaO-MgO subsystems,” Journal of the European Ce-
+ramic Society 38, 4768–4785 (2018).
+46K. Lee, Y. Park, and S. Han, “Ab initio construction of full phase
+diagram of MgO-CaO eutectic system using neural network inter-
+atomic potentials,” Physical Review Materials 6, 113802 (2022).
+47“Matlantis, software as a service style material discovery tool,”
+https://matlantis.com/ .
+48J. P. Perdew, K. Burke, and M. Ernzerhof, “Generalized gradient
+approximation made simple,” Physical review letters 77, 3865
+(1996).
+49J. W. Furness, A. D. Kaplan, J. Ning, J. P. Perdew, and J. Sun,
+“Accurate and numerically eﬃcient r2SCAN meta-generalized
+gradient approximation,” The journal of physical chemistry let-
+ters11, 8208–8215 (2020).
+50J.-D. Chai and M. Head-Gordon, “Long-range corrected hy-
+brid density functionals with damped atom–atom dispersion cor-
+rections,” Physical Chemistry Chemical Physics 10, 6615–6620
+(2008).
+51D. P. Kingma and J. Ba, “Adam: A method for stochastic opti-
+mization,” arXiv preprint arXiv:1412.6980 (2014).
+
+Supplementary Information I for: LightPFP: A Lightweight Route to Ab Initio
+Accuracy at Scale
+Wenwen Li,1,a)Nontawat Charoenphakdee,1,b)Yong-Bin Zhuang,1Ryuhei Okuno,1
+Yuta Tsuboi,1So Takamoto,1Junichi Ishida,2and Ju Li3, 4
+1)Preferred Networks Inc., Tokyo, Japan.
+2)Matlantis Corporation, Tokyo, Japan.
+3)Department of Materials Science and Engineering, Massachusetts Institute of
+Technology, Cambridge, MA 02139, USA
+4)Department of Nuclear Science and Engineering, Massachusetts Institute of
+Technology, Cambridge, MA, USA
+(Dated: 7 November 2025)
+a)Electronic mail: wenwenli@preferred.jp
+b)Electronic mail: nontawat@preferred.jp
+i
+
+Supplementary Note 1. ERROR TRANSFER IN THE
+DFT→PFP→LIGHTPFP PIPELINE
+As mentioned in the main text, the dominant error arises from formally exact →DFT due
+to DFT’s intrinsic limitations; by contrast, DFT →PFP transfer error is already small (with
+the costly training completed), and PFP →LightPFP is even smaller with fast, overnight
+training. Considering independent sources of error e1,e2, ...,emoften do not add up linearly
+but quadratically (if statistically uncorrelated due to diﬀerent “physics"):
+e=/radicalBig
+e2
+1+e2
+2+...+e2
+m, (S1)
+if|e1|∼100meV/atom dominates over |e2|,...,|em|, then the leading-order contributions
+of|e2|,...,|em|to the total error would be even smaller than it seems, based on Taylor
+expansion:
+e≈e1+e2
+2+...+e2
+m
+2e1, (S2)
+and likely become practically negligible. In other words, if the DFT →PFP and PFP→LightPFP
+neural network trainings are done well, LightPFP may represent DFT much better than
+how DFT reﬂects reality.
+ii
+
+Supplementary Note 2. DATASET SAMPLING METHODS
+A robust training dataset for machine learning interatomic potentials is built by sys-
+tematically sampling diverse yet physically meaningful conﬁgurations around one or more
+initial structures. Sampling methods can be combined and run independently to cover ther-
+mal, mechanical, defect, surface, and chemical degrees of freedom. These strategies balance
+relevance to the target material with diversity across conﬁguration space, improving both
+accuracy and robustness of the potential. The illustration of these sampling methods are
+shown at Figure S1
+FIG. S1. Illustration of sampling methods used in the LightPFP dataset generation. (a) Uniform
+compression/stretch sampling, (b) Displacement sampling, (c) Vacancy sampling, (d) Rattle sam-
+pling, (e) Substitution sampling, (f) Surface sampling and (g) Deformation sampling
+iii
+
+A. Molecular dynamics sampling
+Molecular dynamics (MD) sampling generates structures by propagating the atomic sys-
+tem under ﬁnite-temperature dynamics, optionally at controlled pressure. By choosing
+ensembles such as NVT (constant volume) or NPT (constant pressure), and by varying
+temperature, one can explore conﬁgurational space from near-equilibrium states to highly
+disordered regimes. To prevent collecting redundant conﬁgurations, snapshots are taken at
+a ﬁxed stride along the trajectory.
+B. Uniform compression/stretch sampling
+Uniform compression/stretch sampling produces structures by isotropically scaling the
+lattice vectors of the input periodic structure, keeping the lattice angles unchanged and
+preserving fractional atomic coordinates. This method targets the volume–energy relation-
+ship and can be augmented by ﬁxed-cell relaxation or MD runs starting from the scaled
+conﬁgurations to enrich the dataset at speciﬁc densities.
+C. Deformation sampling
+Deformation (strain) sampling applies prescribed normal and shear strain components
+to the unit cell, changing both lattice lengths and angles while maintaining periodicity.
+By scanning the six independent components of the strain tensor, one obtains structures
+spanning elastic distortions relevant to mechanical properties. Atomic positions may be
+further optimized under ﬁxed cell shape to produce relaxed strained conﬁgurations, helping
+the model learn stress–strain behavior and elastic responses.
+D. Displacement sampling
+Single-atom displacement sampling perturbs one atom from its equilibrium position along
+a Cartesian direction by a controlled amplitude. Such localized perturbations probe the
+curvature of the potential energy surface and the force constants around equilibrium, which
+are essential for learning vibrational responses. Each displaced conﬁguration is generated
+independently from the same starting structure to map local force landscapes eﬃciently.
+iv
+
+E. Rattle sampling
+Rattle sampling introduces random displacements to all atoms simultaneously, drawing
+each component of the displacement from a speciﬁed distribution (e.g., Gaussian). This
+global perturbation broadens coverage of non-equilibrium conﬁgurations and can reveal fail-
+ure modes of the model under larger distortions. Because it may produce unphysical con-
+ﬁgurations with extreme forces, ﬁltering based on maximum force thresholds and optional
+relaxation steps are recommended to maintain data quality. This method is recommended
+for the molecular systems since it provided useful information of bond breaking.
+F. Vacancy sampling
+Vacancy sampling creates point-defect structures by randomly removing one or more
+atoms from the initial conﬁguration. These defective structures can be complemented with
+ﬁxed-cell relaxations or MD to sample local reconstructions and thermally activated defect
+conﬁgurations. By including vacancy-containing data, the model gains sensitivity to defect
+energetics and local structural changes associated with missing atoms.
+G. Surface sampling
+Surface sampling constructs slab models by cleaving the periodic bulk along speciﬁed
+Miller indices and introducing a vacuum layer to isolate the surfaces. Symmetry analysis
+can be used to avoid duplicate surfaces generated by equivalent indices in high-symmetry
+crystals. Subsequent ﬁxed-cell relaxations and MD on slab geometries enrich the dataset
+with surface reconstructions and thermal ﬂuctuations. This approach is intended for periodic
+crystalline inputs and targets accurate description of surface energetics and structure.
+H. Substitution sampling
+Element substitution sampling generates chemically disordered structures by stochasti-
+cally replacing atoms in the initial structure with user-speciﬁed species at deﬁned probabil-
+ities. This method captures conﬁgurational variability in multicomponent systems, such as
+alloys, by sampling diverse local chemistries. Fixed-cell relaxation and MD can be applied
+v
+
+after substitution to explore thermally accessible conﬁgurations, improving robustness and
+transferability across compositional variations. This method is useful for the solid-solution
+and high-entropy alloy.
+vi
+
+Supplementary Note 3. HYPERPARAMETERS OF LIGHTPFP MODELS
+The hyperparameters of the LightPFP models used in the results section is listed here
+Material Cutoﬀ levmax CµCνnqNeural Network Readout
+Ni3Al 6.0 8 1 1 16 None
+Li6PS5Cl 6.0 8 1 1 16 [16, 16, 1]
+HEA 5.0 8 1 1 16 None
+MgO 6.0 8 1 1 16 [16, 16, 1]
+SiO2-HF 6.0 8 1 1 16 [16, 16, 1]
+To specify the complexity of momenta tensor potential, parameter cutoﬀ, levmax, µ,ν,
+nqis used. Once such hyperparameters are deﬁned, each admissible basis function must have
+the level less than levmax. As explained in the maintext, the basis function Bαcomprises
+of matrix contractions of moment descriptors Mµ,ν
+Mµ,ν(ni) =/summationdisplay
+jfµ(rij)rij⊗rij⊗···⊗rij/bracehtipupleft/bracehtipdownright/bracehtipdownleft /bracehtipupright
+νtimes
+where the level of basis can be calculated as
+lev = 2+ Cµ×µ+Cν×ν (S3)
+Thenqis the number of radial basis functions in the polynomial function. 27 basis
+functions are admissible when we set levmax=8, Cµ=1,Cν=1:
+where “·” is a dot product between vectors and “ :” is a Frobenius product of two matrices.
+Intuitively, one can think that the higher the levmax, the more complex the MTP. The
+lowerCµandCν, the more complex the MTP. Note that the more complex the MTP, the
+more memory and the longer the computation time it requires.
+vii
+
+Basis index Moment tensor component Level
+B0 M0,0 2
+B1 M0,0×M0,0 4
+B2 M0,0×M0,0×M0,0 6
+B3 M0,0×M0,0×M0,0×M0,08
+B4 M1,0 3
+B5 M0,0×M1,0 5
+B6 M0,0×M0,0×M1,0 7
+B7 M1,0×M1,0 6
+B8 M0,0×M1,0×M1,0 8
+B9 M2,0 4
+B10 M0,0×M2,0 6
+B11 M0,0×M0,0×M2,0 8
+B12 M1,0×M2,0 7
+B13 M2,0×M2,0 8
+B14 M3,0 5
+B15 M0,0×M3,0 7
+B16 M1,0×M3,0 8
+B17 M4,0 6
+B18 M0,0×M4,0 8
+B19 M5,0 7
+B20 M6,0 8
+B21 M0,1·M0,1 6
+B22 M0,0×(M0,1·M0,1) 8
+B23 M0,1·M1,1 7
+B24 M0,1·M2,1 8
+B25 M1,1·M1,1 8
+B26 M0,2:M0,2 8
+TABLE S1. Deﬁnitions of Biwith corresponding right-hand side expressions and levels.
+viii
+
+Supplementary Note 4. DETAILS FOR HIGH-ENTROPY ALLOY
+EXAMPLE
+Detailed results for the high-entropy alloy (HEA) case study are presented here. Figure S2
+compares the speed of LightPFP with that of other models. Figure S3presents the equation
+of state (EOS) of the HEA as computed by diﬀerent models. Table S2summarizes the
+datasets used for the training of LightPFP and MTP-DFT models.
+FIG. S2. (a) Molecular dynamics (MD) computational speed with AlCoCrFeNi high-entropy alloy
+as a function of number of atoms for three MLIPs: PFP, LightPFP (MTP), and MACE. (b) Trade-
+oﬀ between the overall time spent on MLIP building for AlCoCrFeNi high-entropy alloy, including
+data collection and model training, and MD computational speed for PFP, LightPFP, MACE, and
+MTP. Inset: the total time cost to complete both MLIP building and a 10 ns MD simulation of a
+10,000-atom system With PFP, LightPFP, MACE, and MTP.
+ix
+
+FIG. S3. Equation of states of AlCoCrFeNi high-entropy alloy calculated by DFT, PFP, LightPFP,
+MACE and MTP
+TABLE S2. Composition of the AlCoCrFeNi high-entropy alloy dataset.
+Type of Sampling Number of Number of
+structure method structures atoms
+LightPFP Dataset (labeled by PFP)
+crystal substitution+MD 2040 206040
+boundary substitution+MD 6200 1083760
+slab substitution+MD 1398 66816
+Total 9638 1356616
+MTP Dataset (labeled by DFT)
+crystal substitution+MD 531 42484
+boundary substitution+MD 286 9152
+slab substitution+MD 195 8724
+Total 1012 60360
+x
+
+FIG. S4. Parity plot of DFT forces againes predicted forces by diﬀerent MLIPs, (a) PFP; (b)
+LightPFP; (c) MACE and (d) MTP
+xi
+
+Supplementary Note 5. DETAILS IN DATA EFFICIENCY EVALUATION
+FIG. S5. Detailed comparison of data eﬃciency between ﬁne-tuned pretrained and scratch-trained
+student models.
+xii
+
+Supplementary Note 6. PRETRAINED STUDENT MODEL
+a. All-elements pretrained student model We employed a comprehensive dataset to
+train PFP, a universal potential-based graph neural networks. This dataset comprises 86
+diﬀerent elements, covering nearly the entire periodic table and encompassing both equilib-
+rium structures and numerous disordered structures that deviate from equilibrium states.
+The dataset includes not only bulk phases but also complex structures such as surfaces, ad-
+sorption conﬁgurations, and clusters. This comprehensive coverage is the fundamental rea-
+son why PFP exhibits broad applicability across diverse materials simulations. For dataset
+details, please refer to Takamoto et al.1.
+However, compared to PFP1, moment tensor potentials (MTPs) are compact models with
+limited parameters and constrained expressive power, typically applicable only to single ma-
+terials systems. Consequently, using MTPs to ﬁt all datasets simultaneously presents sig-
+niﬁcant challenges. Therefore, our MTP pretraining strategy aims to optimize the model to
+facilitate subsequent ﬁne-tuning for individual tasks, instead of maximizing accuracy across
+all datasets. To achieve this objective, we employed the Reptile meta-learning algorithm2.
+The Reptile algorithm operates by iteratively sampling tasks from a task distribution
+and updating model parameters to enhance the model’s ability to rapidly adapt to new
+tasks. In our implementation, we partitioned the complete dataset into 12 speciﬁc tasks
+based on structural types. During each inner loop iteration, we select a task (i.e., a dataset
+containing speciﬁc structural types such as single molecules) to train the MTP model. Given
+the substantial size of each task’s dataset, we limit training to one epoch per inner loop before
+proceeding to the parameter update. The model parameters are then updated according to
+the following formula:
+δθ=θi−θ,
+θ←θ+βδθ,
+whereθrepresents the MTP parameters, θidenotes the parameters after the i-th inner
+loop, and βis a hyperparameter in the Reptile algorithm that controls the magnitude of the
+meta-update step during training. In our implementation, βis set to 0.5. We iteratively
+repeat the task sampling and inner-loop/meta-update procedures for 100iterations until
+convergence of energy, forces, and stress is observed across all datasets.
+We employed the Adam optimization method with a learning rate of 1×10−3. The model
+xiii
+
+was trained for 1 epochs with a batch size of 256. Total pretraining time was approximately
+100 hours.
+For example, pretrained student model with hyperparameter (levmax=8, Cµ=1,Cν=1,
+nq=16) contains 86 ×86×4×16 training parameters for the radial function cand additional
+27 coeﬃcients for the basis functions ξ. The modular structure of MTP enables selective
+parameter extraction during inference or ﬁne-tuning, signiﬁcantly enhancing computational
+eﬃciency. The extraction procedure is straightforward, depending on elements used for the
+task. For example, when handling a material containing only H and O elements, we can ex-
+tract the relevant subset of the radial function parameter tensor—speciﬁcally a 2 ×2×4×16
+matrix corresponding to these elements, while maintaining the coeﬃcients of the basis func-
+tion unchanged. Consequently, although the pretrained model may contain numerous pa-
+rameters, it automatically reduces to a compact, element-speciﬁc model equivalent in size
+to those trained from scratch for the particular material system.
+b. Speciﬁc type pretrained student model In addition to the pretrained LightPFP model
+that covers almost all materials, we also tried pretrained LightPFP models for special types
+of materials. As an illustrative example, we consider our organic pretrained student model,
+which is speciﬁcally designed for organic molecular systems. The training process begins
+with dataset construction. We randomly sample molecular information, such as SMILES
+representations, from PubChem3and generate corresponding three-dimensional conformers.
+Several molecules are then randomly placed into a simulation box, ensuring that the overall
+density falls within an appropriate range. An optimization algorithm is employed to adjust
+atomic positions without breaking chemical bonds, thereby minimizing atomic overlap be-
+tween molecules. From these initial conﬁgurations, we perform molecular dynamics (MD)
+simulations using PFP at temperatures randomly selected between 300 and 3000 K. Each
+simulation runs for 1000 steps, and conﬁgurations are sampled every 100 steps. This pro-
+cedure is repeated many times to obtain a diverse collection of molecular conﬁgurations.
+The resulting dataset is subsequently used for training a Moment Tensor Potential (MTP)
+model, yielding a pretrained MTP tailored for organic systems.
+We observe that when the model is restricted to a speciﬁc class of materials, the pre-
+trained MTP demonstrates a notable capability for direct application without ﬁne-tuning.
+As shown in Fig. S6, the pretrained model accurately predicts the densities of various or-
+ganic molecules, exhibiting strong agreement with experimental results despite the absence
+xiv
+
+of these molecules from the training dataset. This ﬁnding suggests a promising new di-
+rection: by constraining the material domain, one can develop lightweight machine-learned
+interatomic potentials (MLIPs) with reduced generalization compared to universal MLIPs
+(uMLIPs), yet capable of fast inference and requiring no additional training. For instance,
+pretrained student models can be constructed for speciﬁc material classes such as alloys,
+oxides, perovskites, and metal–organic frameworks (MOFs).
+FIG. S6. Learning curves for diﬀerent training strategies.
+xv
+
+Supplementary Note 7. 3-STAGES TRAINING METHOD
+We propose a three-stage training strategy for the LightPFP model. In Stage I, the
+optimization focuses on ﬁtting forces; in Stage II, the emphasis shifts to energy and stress;
+and in Stage III, the loss terms are balanced so that the energy, force, and stress losses are
+of comparable magnitudes. This is achieved by progressively adjusting the coeﬃcients of
+the energy ( α), force (β) and stress ( γ) terms in the loss function.
+To assess the eﬀectiveness of this strategy, we trained on the Li 6PS5Cl dataset and con-
+ducted three ﬁxed-weight baselines. Each baseline uses constant loss weights equal to those
+employed in one stage of the three-stage schedule: Baseline 1 ( α= 10−5,β= 10.0,γ= 10−5),
+Baseline 2 ( α= 1.0,β= 0.1,γ= 10.0), and Baseline 3 ( α= 26.2,β= 0.034,γ= 1383.1).
+The evolution of the losses over epochs is shown in Figure S7, and the ﬁnal losses are
+summarized in Table S3.
+FIG. S7. Learning curves for diﬀerent training strategies.
+baseline 1 baseline2 baseline3 3-stages-training
+energy1.67×10−45.76×10−64.39×10−64.96×10−6
+forces 0.00486 0.00651 0.0110 0.00631
+stress3.03×10−71.35×10−71.50×10−79.28×10−8
+TABLE S3. Comparison of the ﬁnal energy, force, and stress losses across training strategies.
+Baseline 1 fails to ﬁt the energy accurately, yielding the largest energy loss, while Baseline
+3 fails to ﬁt forces accurately. Baseline 2 oﬀers a more balanced trade-oﬀ; however, its energy,
+force, and stress losses are all larger than those achieved by the three-stage training. Overall,
+the proposed three-stage schedule provides the best balance across the three targets, with
+xvi
+
+near-optimal energy and stress losses and competitive force accuracy.
+xvii
+
+Supplementary Note 8. ACTIVE LEARNING METHOD
+Active learning is a powerful approach for developing accurate and eﬃcient interatomic
+potentials in molecular dynamics simulations. Here is a brief introduction of the active
+learning workﬂow we used for the "Dry etching of SiO 2" example and several other examples
+in the Supplementary Materials II (see Fig. S8):
+1. Initial Dataset: A simple initial dataset is necessary for active learning. The initial
+dataset does not need to be large and robust.
+2. Model Training: The initial LightPFP model is trained with this initial dataset.
+3. Exploration: The LightPFP model is then used to drive molecular dynamics (MD)
+simulations, exploring new conﬁgurations and areas of the potential energy surface.
+4. Quality Check: At certain MD steps, check the accuracy of LightPFP. Calculate
+the energy, forces, and stress of the MD snapshot using PFP, and compare these with the
+LightPFP predictions.
+5. Data Selection: Include the MD snapshot in the training dataset if the discrepancy
+between PFP and LightPFP is greater than the minimum threshold and less than the max-
+imum threshold.
+6. Model Update: After several MD simulations are ﬁnished or cease based on other
+criteria, update the LightPFP model with the dataset collected in current and previous
+iterations and the initial dataset.
+7. Iteration: Steps 3 to 6 are repeated iteratively. Each iteration improves the potential’s
+accuracy and extends its applicability.
+This active learning approach allows for the eﬃcient development of accurate potentials by
+focusing computational resources on the most informative data points, ultimately resulting
+in a potential that can reliably reproduce the behavior of the target system across a wide
+range of conditions.
+a. Sampling threshold We uses minimum/maximum thresholds to collect high-quality
+training data. For more eﬃcient training data collection, it also performs early stopping of
+MD simulations or PFP-based sampling upon detecting outliers. Both PFP and LightPFP
+are used to calculate the energy, forces, and stress of given MD snapshots. The errors of
+LightPFP w.r.t PFP are used to determine if certain MD snapshots should be collected. The
+valid error range is deﬁned by both a minimum (lower bound) and a maximum threshold
+xviii
+
+FIG. S8. Illustration of active learning workﬂow
+(upper bound). When the error of an MD snapshot is very large, exceeding the upper bound,
+it indicates an unreasonable structure that is not beneﬁcial for training. Continuing MD
+from this point can lead to more structures that are not valuable. In such cases, the MD
+simulation will stop early. In the "Dry etching of SiO 2" example, error checking is performed
+every 100 steps, and the selection criterion is: energy error in between 5.0 and 40.0 times
+of energy MAE of current using LightPFP model; force error (largest atomic error in the
+structure) is in between 1.5 and 50 eV/A.
+b. MD early stop As mentioned, the MD simulation will stop early when the discrep-
+ancy between PFP and LightPFP is very large. This indicates that the MD has reached
+a conﬁguration where the current LightPFP model is unreliable. While structures with
+huge errors compared to PFP are not useful for training, the structures leading up to such
+structures, typically several MD steps before, are critical. Learning from these preceding
+structures helps prevent the MD from evolving into unphysical conﬁgurations. Our work-
+xix
+
+FIG. S9. Back-tracking mechanism of active learning when MD failed
+ﬂow provides two mechanisms for this: (1) Back-tracking Method: When MD stops due to
+large prediction errors, the algorithm checks previous MD steps using a binary search until
+a training structure with the error in the speciﬁed region is found. MD snapshots are cached
+to facilitate this process. (2) PFP-based fallback: When MD stops early, the simulation rolls
+back to the previous checkpoint and continues using PFP instead of the LightPFP model
+for several more additional samples. In the "Dry etching of SiO 2" example, we collect 5
+additional training structures based on PFP when MD failed.
+c. Model update The model is updated in each iteration with the latest dataset and
+all previous datasets. To accelerate active learning, the total number of epochs for model
+training is adjusted according to the size of whole datasets, and the training time is kept
+roughly constant. This mechanism is designed to handle the gradually increasing dataset
+during the active learning iterations. In the "Dry etching of SiO 2" example, we ﬁxed the
+time cost for each model update to 0.5 hour.
+xx
+
+REFERENCES
+1S. Takamoto, C. Shinagawa, D. Motoki, K. Nakago, W. Li, I. Kurata, T. Watanabe,
+Y. Yayama, H. Iriguchi, Y. Asano, et al., Nature Communications 13, 2991 (2022).
+2A. Nichol, J. Achiam, and J. Schulman, arXiv preprint arXiv:1803.02999 (2018).
+3S. Kim, J. Chen, T. Cheng, A. Gindulyte, J. He, S. He, Q. Li, B. A. Shoemaker, P. A.
+Thiessen, B. Yu, et al., Nucleic acids research 53, D1516 (2025).
+xxi
+
+Supplementary Information II for: LightPFP: A Lightweight Route to Ab Initio
+Accuracy at Scale
+Wenwen Li,1,a)Nontawat Charoenphakdee,1,b)Yong-Bin Zhuang,1Ryuhei Okuno,1
+Yuta Tsuboi,1So Takamoto,1Junichi Ishida,2and Ju Li3, 4
+1)Preferred Networks Inc., Tokyo, Japan.
+2)Matlantis Corporation, Tokyo, Japan.
+3)Department of Materials Science and Engineering, Massachusetts Institute of
+Technology, Cambridge, MA 02139, USA
+4)Department of Nuclear Science and Engineering, Massachusetts Institute of
+Technology, Cambridge, MA, USA
+(Dated: 7 November 2025)
+a)Electronic mail: wenwenli@preferred.jp
+b)Electronic mail: nontawat@preferred.jp
+i
+
+CONTENTS
+S1. Application 1: Simulation of interfacial structures of Pt
+(111)/benzene iv
+S1.1. Student ﬁne-tuning iv
+S1.2. Evaluation using PFP iv
+S2. Application 2: Miscibility of water, benzene and heptane viii
+S2.1. Student ﬁne-tuning viii
+S2.2. Large-scale MD simulation viii
+S3. Application 3: Interface thermal resistance between Ni and
+DPO/BP xii
+S3.1. Student ﬁne-tuning xii
+S3.2. Evaluation using PFP xiii
+S4. Application 4: Viscosity of n-decane xvi
+S4.1. Student ﬁne-tuning xvii
+S4.2. Evaluation using PFP xvii
+S4.3. Large-scale MD simulation xviii
+S5. Application 5: Crack propagation in graphene nanoribbon xxi
+S5.1. Student ﬁne-tuning xxi
+S5.2. Evaluation using PFP xxii
+S6. Application 6: Friction of Fe 2O3surface with lubricant and fatty
+acid surfactant xxv
+S6.1. Student ﬁne-tuning xxv
+S6.2. Evaluation using PFP xxvi
+S7. Application 7: Diﬀusion behavior in Polymer Ionic Liquid xxviii
+S7.1. Student ﬁne-tuning xxviii
+S7.2. Evaluation using PFP xxix
+S8. Application 8: Mechanical property of SiO 2–P2O5–Al2O3–Na2O
+ii
+
+glass xxxii
+S8.1. Student ﬁne-tuning xxxii
+S8.2. Evaluation using PFP xxxiii
+S9. Application 9: Heterogeneous grain boundary between FCC Cu and
+BCC Mo xxxvi
+S9.1. Student ﬁne-tuning xxxvi
+S9.2. Evaluation using PFP xxxvii
+S10. Application 10: Micelle simulation xxxix
+S10.1. Student ﬁne-tuning xxxix
+S10.2. Large-scale MD simulation xl
+S11. Application 11: Chemical mechanical polishing of Si surface xliii
+S11.1. Student ﬁne-tuning xliii
+S11.2. Evaluation using PFP xliv
+S11.3. Large-scale MD simulation xliv
+References xlvi
+iii
+
+S1. APPLICATION 1: SIMULATION OF INTERFACIAL STRUCTURES
+OF PT (111)/BENZENE
+The main purpose of this example is to demonstrate how to build and validate the
+LightPFP model to simulate the solid-liquid interface using the Pt/benzene interface as
+a model system. By leveraging LightPFP’s enhanced speed and accuracy, researchers can
+gain insights into solid-liquid interface behavior and expand its applications in materials
+science, chemistry, and nanotechnology.
+S1.1. Student ﬁne-tuning
+To train the LightPFP model, we compiled a diverse set of structures with their energies,
+forces, and stresses labeled using the PFP. The training dataset encompassed various com-
+ponents: bulk Pt, Pt (111) slab, bulk benzene, and Pt (111)/benzene interface structures.
+System Methods Num of Num of
+structures Atoms
+Pt Cell compression/Streching/Deforming
+Atom Displacement
+Vacancy
+Surface and MD (NPT 500–1500 K)2249 111,290
+Pt (111) MD (NPT 500–1000 K) 640 43,680
+Benzene Cell compression/Streching
+MD (NPT 300–400 K; NVT 500–1500 K)984 177,120
+Interface MD (NPT 300–800 K; NVT 500–1750 K) 5400 2,632,800
+The dataset was randomly split into training and testing datasets, with 90\% comprising
+the training dataset and the remaining 10\% constituting the testing dataset.
+S1.2. Evaluation using PFP
+To validate the performance of the LightPFP models, we performed MD simulations on
+a small Pt (111)/benzene interface system and compared the trajectories with PFP.
+iv
+
+FIG. S1: Parity plots for energy, forces, and stress on the test set: PFP ground-truth
+values (x-axis) vs LightPFP model predictions (y-axis).
+The initial simulation box has dimensions of 38.58Å×33.10Å×101.32Å, with cell angles
+of90◦,90◦, and120◦. It consists of a total of 9,072 atoms, including 1,512 Pt atoms and
+630 benzene molecules. We have chosen a relatively smaller structure in order to compare
+the results with PFP.
+The initial structure undergoes a 20 ps equilibrium at a temperature of 300.0 K at ﬁrst,
+using the NVT ensemble. Subsequently, NPT MD simulations are conducted for 100 ps at
+300.0 K and 1 bar, utilizing the NPT ensemble. MD snapshots is saved for future analysis.
+The density of the interface structure is estimated to 5.08 g/cm3from the NPT MD based
+on LightPFP, which aligns well with the results from PFP MD trajectory, 5.06 g/cm3. To
+calculate the radial distribution function, we used the snapshots of the MD trajectory taken
+after 50 ps. The resulting radial distribution function is shown in Fig S2. We discovered
+that the results obtained from both the LightPFP and PFP trajectories exhibit a high degree
+of agreement.
+To characterize the atomic distribution along the z axis (normal to the interface), we
+sampled MD trajectory snapshots after 50 ps and generated a z-position density via Gaussian
+broadening (width 0.25 Å). The resulting distribution is plotted in Fig. S3.
+The density proﬁle in Fig S3shows several peaks in the H and C elements near the Pt
+surface (around 20 Å), indicating that the benzene structure is signiﬁcantly diﬀerent from
+the uniform liquid phase due to adsorption with the Pt surface. As we move further away
+from the Pt surface, the interfacial liquid structure gradually transitions towards a uniform
+liquid phase. According to the ﬁgure, the thickness of the interfacial layer is approximately
+v
+
+FIG. S2: Comparison of radial distribution functions from LightPFP and PFP trajectories
+15 Å.
+The position and intensity of the peaks in the LightPFP model were compared with the
+PFP result, and they matched each other across most regions. This alignment demonstrates
+that the LightPFP model eﬀectively captures and represents the structural characteristics
+of the solid/liquid interface.
+Symmetric peaks can be observed around z= 100 Å, indicating the presence of the same
+liquid-solid interface due to the periodic boundary condition. However, these peaks exhibit
+slight ﬂuctuations in shape due to noise originating from cell shape changes in the NPT MD
+simulation.
+In Fig S4, we can observe the benzene molecules that have adsorbed onto the Pt sur-
+vi
+
+FIG. S3: Spatial distribution of Pt, C and O atoms along the z direction. (left) Whole
+simulation box. (right) Zoomed-in view at the interface.
+FIG. S4: The benzene adsorption on Pt surface (left) LightPFP (middle) PFP (right) The
+bri30 adsorption site of the benzene molecule.
+face. Speciﬁcally, in the LightPFP MD simulation, 18 benzene molecules were found to be
+adsorbed onto the Pt surface within the speciﬁed area. In the PFP MD simulation, on the
+other hand, there were a total of 21 benzene molecules observed to be adsorbed onto the Pt
+surface within the same area. In conclusion, the LightPFP MD simulation reproduced the
+surface coverage rate of benzene on the Pt surface well.
+Fig.S4(right) illustrates the adsorption structure of a single benzene molecule. The bri30
+conformation, in which the center of the benzene molecule is located on the bridge site of
+the Pt surface, was found to be the most energetically stable in ﬁrst-principles calculations1.
+Interestingly, we observed that almost all the molecules were adsorbed in the bri30 site in
+both the LightPFP and PFP simulations. This result is consistent with the ﬁndings of the
+ﬁrst-principle calculations.
+vii
+
+S2. APPLICATION 2: MISCIBILITY OF WATER, BENZENE AND
+HEPTANE
+In this example, we use LightPFP to investigate the miscibility of binary liquid mixtures
+among water, benzene and heptane via large-scale molecular dynamics simulations using
+LightPFP.
+S2.1. Student ﬁne-tuning
+We trained LightPFP on a collection of datasets designed to cover both homogeneous and
+demixed liquid environments. The initial dataset comprised nine classes of conﬁgurations:
+(1) bulk water, (2) bulk benzene, (3) bulk heptane, (4) homogeneous water/benzene mix-
+tures, (5) homogeneous water/heptane mixtures, (6) homogeneous heptane/benzene mix-
+tures, and (7) explicit liquid–liquid interfaces for water/benzene, (8) water/heptane, and (9)
+heptane/benzene. To eﬃciently obtain interfacial training data, we constructed liquid–liquid
+interface geometries and sampled them by short MD, rather than relying on spontaneous
+demixing from homogeneous starting states. The latter would require prohibitively long
+trajectories to capture phase-separated conﬁgurations because phase separation proceeds
+via slow nucleation, coarsening, and domain growth. By seeding and sampling interfacial
+structures, the training set explicitly exposed the model to the distinct local environments
+present at liquid–liquid boundaries.
+Starting from this initial model, we performed active learning to further improve accuracy
+and robustness. For each of the nine system types, we ran 20 ps MD simulations over
+280-350 K, monitored model performance, and selectively augmented the training set with
+conﬁgurations with high disagreement w.r.t. PFP. The resulting LightPFP model was then
+used for the large-scale MD simulation.
+S2.2. Large-scale MD simulation
+Three systems are considered: (1) 17,280 water molecules with 4,320 benzene molecules;
+(2) 17,280 water molecules with 2,160 heptane molecules; and (3) 4,320 benzene molecules
+with 2,160 heptane molecules. A 1 ns molecular dynamics simulation was performed for each
+system. According to experimental data, water and heptane, water and benzene are immis-
+viii
+
+FIG. S5: Surface area of liquid-liquid interface.
+cible at room temperature, while heptane and benzene are miscible2For the water/benzene
+and water/heptane mixtures, spontaneous liquid–liquid phase separation is clearly observed
+in the MD trajectories, with the two immiscible components forming distinct phases. In
+contrast, no phase separation is observed for the benzene/heptane mixture, as these liq-
+uids are mutually miscible. The MD simulation results are all consistent with experimental
+observations.
+To quantify demixing, we analyzed the MD snapshots and computed the liquid–liquid in-
+terfacial area using OVITO’s construct surface mesh modiﬁer with the alpha-shape method3.
+For each saved frame, the two species were identiﬁed, a triangulated interface was gener-
+ated, and the total interfacial area was recorded. The time evolution of this area is plotted
+in Fig. S5. For the water/benzene and water/heptane mixtures, the interfacial area drops
+rapidly and then approaches a low, nearly steady value, indicating fast coarsening and
+macroscopic phase separation. In contrast, for the benzene/heptane mixture, the interfacial
+area remains essentially unchanged from the outset over the entire 1 ns window, consistent
+with the absence of demixing. In addition, the experimental data show that the solubil-
+ity of heptane in water is lower than that of benzene. In MD simulations, we also found
+that the interface area decreases more rapidly in the heptane-water system, reﬂecting faster
+nucleation and phase transition dynamics2,4. Figures S6,S7, and S8show representative
+interface morphologies at diﬀerent times, providing a visual corroboration of these trends:
+the liquid–liquid interface in water/benzene and water/heptane smooths and recedes over
+time, whereas no well-deﬁned interface emerges in benzene/heptane.
+ix
+
+FIG. S6: Liquid-liquid interface between water and benzene
+FIG. S7: Liquid-liquid interface between water and heptane
+x
+
+FIG. S8: Liquid-liquid interface between heptane and benzene
+xi
+
+S3. APPLICATION 3: INTERFACE THERMAL RESISTANCE BETWEEN
+NI AND DPO/BP
+In this example, we use LightPFP to quantify interfacial thermal transport between a Ni
+(111) surface and the diphenyl oxide (DPO)/biphenyl (BP) eutectic heat-transfer ﬂuid, a
+widely used medium in parabolic trough concentrated solar power systems with a maximum
+operating temperature near 400◦C. Our target property is the thermal conductivity across
+the metal–ﬂuid interface, which governs heat exchange eﬃciency in receiver tubes and heat
+exchangers5.
+S3.1. Student ﬁne-tuning
+We trained LightPFP on a dataset tailored to capture both bulk and interfacial envi-
+ronments relevant to the Ni–DPO/BP system. The initial conﬁgurations encompassed four
+classes: bulk Ni, a Ni (111) slab exposing the surface, bulk liquid DPO/BP, and explicit
+Ni (111) and DPO/BP interfaces. Each class was sampled via short molecular dynamics
+and light “rattle” perturbations to diversify local environments. MD sampling covered NVT
+simulations at 500 K, 1000 K, and 1500 K and NPT simulations at 300 K, 400 K, and 500 K.
+The high-temperature NVT trajectories were chosen to generate randomized, higher-energy
+conﬁgurations that improve the robustness and stability of the trained model; in contrast,
+the NPT sampling was restricted to lower temperatures to avoid unphysical density ﬂuctu-
+ations and cell distortions that can arise at very high temperatures under barostat control.
+For bulk liquid DPO/BP and for Ni (111)-DPO/BP interfaces, we also manually created
+multiple distinct atomic conﬁgurations prior to short MD “structure sampling.” This man-
+ual seeding was used to enrich the distribution of molecular orientations in the training set,
+because orientational rearrangements in the liquid and at the metal–liquid interface relax
+slowly in MD, especially in the 300–500 K range.
+Starting from this base model, we performed active learning to improve accuracy and
+robustness over the temperature range of interest. For each conﬁguration class, we ran
+short MD trajectories spanning 300–500 K under complementary conditions: 5 ps NVT, 10
+ps NPT, and 30 ps reverse non-equilibrium MD (rNEMD) to explicitly sample heat-ﬂow
+states. We also varied setup details (for example, MD temperature, slab and liquid layer
+xii
+
+FIG. S9: Density of Ni and DPO/BP interface structure at 300 K
+thickness and the swapping interface rNEMD etc) to enrich coverage of interfacial motifs.
+Conﬁgurations exhibiting high model disagreement were iteratively labeled and added to
+the training set, and the query–retrain loop was repeated until validation metrics stabilized.
+S3.2. Evaluation using PFP
+We assessed the resulting LightPFP model against a reference PFP potential under
+matched conditions. The model reproduces key equilibrium and non-equilibrium observ-
+ables: system densities (Fig S9) and radial distribution functions (Fig. S10) for interfacial
+systems, as well as steady-state temperature proﬁles obtained from reverse non-equilibrium
+MD across Ni (111)-DPO/BP interfaces (Fig. S11). The close agreement with PFP across
+these metrics supports the use of LightPFP for the interfacial thermal conductivity calcula-
+tions reported below.
+xiii
+
+FIG. S10: Radial distribution function of Ni and DPO/BP interface structure at 300 K
+xiv
+
+FIG. S11: Temperature proﬁle across Ni and DPO/BP interface
+xv
+
+S4. APPLICATION 4: VISCOSITY OF N-DECANE
+In this study, we target the shear viscosity of liquid n-decane via reverse non-equilibrium
+molecular dynamics (rNEMD) using the Müller–Plathe momentum-exchange scheme6. To be
+more speciﬁc, a liquid is equilibrated at the target thermodynamic state and the simulation
+box is partitioned into slabs along the gradient direction, with two slabs designated as
+momentum source and sink. At ﬁxed intervals, the particle with the largest positive ﬂow-
+direction velocity in the source slab and the particle with the most negative component in
+the sink slab exchange their ﬂow-direction velocities, imposing a constant momentum ﬂux.
+The spatially resolved velocity proﬁle is accumulated and time-averaged; its linear region
+away from the exchange slabs provides the velocity gradient. The imposed ﬂux is computed
+from the cumulative exchanged momentum divided by cross-sectional area and simulation
+time (accounting for periodic shear planes). The shear viscosity is then η=J
+dv/dz, where
+Jis cumulative exchanged momentum, vis the velocity of atoms and zis atomic position
+along z axis.
+Important practical considerations accompany rNEMD. Because accessible simulation
+times are limited, rNEMD often relies on velocity gradients far larger than those used in
+experiments, which can alter molecular orientation (e.g., induce partial alignment along
+the ﬂow) and thereby modify the intrinsic shear response. To reduce the artiﬁcially im-
+posed gradient, one can lower the exchange frequency or elongate the simulation box along
+the gradient direction. Lowering the exchange frequency weakens the driving but requires
+longer MD sampling to resolve the slope of the velocity proﬁle accurately, particularly for
+high-viscosity liquids. Increasing the box length similarly reduces the gradient at a given
+momentum ﬂux but raises computational cost. This makes uMLIP require longer time to
+compute viscosities for many molecules, whereas the LightPFP method becomes more useful
+due to its better computational eﬃciency. In this example, we selected n-decane as the case
+study and trained its LightPFP model. We computed the viscosity of n-decane at high
+temperatures under diﬀerent computational conditions using both PFP and LightPFP as a
+validation of LightPFP. Because viscosity is lower at high temperature, PFP also yields good
+results. We then used LightPFP to compute the viscosity of n-decane at room temperature,
+ultimately obtaining values that closely match experiment.
+xvi
+
+S4.1. Student ﬁne-tuning
+We trained LightPFP for n-decane with a dataset focused on bulk liquid environments.
+Several initial liquid structures were generated with realistic densities to cover diﬀernt
+molecule orientations. The initial dataset combined short MD segments and “rattle” per-
+turbations to diversify local conﬁgurations: NVT trajectories at 500 K, 1000 K, and 1500
+K; NPT trajectories at 300 K, 400 K, 500 K, and 600 K; and rattle displacements are
+sampled from normal distribution with standard deviation of 0.10 Å and 0.15 Å. As in
+our other applications, high-temperature NVT sampling was used to generate randomized,
+higher-energy conﬁgurations that improve robustness, whereas NPT sampling was focused
+at moderate temperatures to avoid unphysical density excursions and cell distortions that
+can occur under aggressive barostatting at very high temperatures.
+Starting from this base model, we executed an active learning loop tailored to the viscosity
+task. For bulk liquid n-decane, we ran short trajectories under complementary ensembles
+and non-equilibrium driving: 5 ps NVT, 10–20 ps NPT, and 20–30 ps rNEMD. rNEMD
+simulations followed the slab-based momentum-exchange approach, with systematic vari-
+ation of setup details (swap interval, swap slab thickness, and cell aspect ratio) to probe
+sensitivity and enrich conﬁgurational coverage. Conﬁgurations exhibiting large model dis-
+agreement were labeled and added to the training set; the query–retrain cycle was repeated
+until validation metrics stabilized.
+S4.2. Evaluation using PFP
+After obtaining the LightPFP model, we ran the rNEMD calculation using PFP and
+LightPFP. The calculation method is as follows: First, the size of initial simulation box is
+17.3x17.3x51.9 angstrom contains 48 n-decane molecules. Then, the MD is performed with
+NVT ensemble for 5 ps at 400, 450 and 500 K, and then, NPT ensemble for 20 ps at the same
+temperature, 1 bar to achieve equilibrium status. After that, the rNEMD is performed, the
+simulation box is divided into 20 slabs. For each temperature, the momenta exchange is
+performed for each 100 fs or 500 fs. The rNEMD is performed for 50 ps to achieve a stable
+momenta proﬁle across the simulation box.
+The accuracy of LightPFP is evaluated by comparision several properties with PFP re-
+xvii
+
+TABLE S1: Density of n-decane at diﬀerent temperatures
+Temperature (K) PFP (g/cm3) LightPFP (g/cm3) Error (g/cm3)
+400 0.689 0.675 0.014
+450 0.647 0.650 0.003
+500 0.611 0.617 0.006
+sults. As shown in table S1at 400, 450 and 500 K is obtained from the NPT-MD part
+of trajectory. The predicted liquid densities agree well with PFP with an average absolute
+deviation of 0.0076 g/cm3. The radial distribution functions for n-decane also obtained from
+the MD frames took from the NPT part. The result are plotted in Fig S12showing a close
+agreement with PFP over the same temperature range.
+At last, we compared the viscosity results calculated by LightPFP and PFP (Fig. S13(a)).
+First, at 450 K, both PFP and LightPFP yield the same viscosity of 0.2 mPa ·s for exchange
+intervals of 100 fs and 500 fs. All results are consistent with experimental data7at 446.75 K.
+At 400 K, viscosities computed with a 500 fs momentum-exchange interval were higher than
+those with a 100 fs interval for both PFP and LightPFP. Under both intervals, PFP and
+LightPFP were in close agreement. The MD-derived viscosities spanned 0.23–0.51 mPa ·s
+across the tested conditions, and the experimental value of 0.29 mPa ·s falls within this range.
+S4.3. Large-scale MD simulation
+After conﬁrm the reliability of the LightPFP model by comparing the high-temperatures
+viscosity with PFP and experimental results, we tried to run large-scale MD simulation to
+get more accuract viscosity at low temperature. The simulation box size is 34.6 x 34.6 x
+103.8 Angstrom, which contains 384 n-decane molecules. We run the MD simulation at 300,
+350 and 400 K. The MD protocol is same as the above one, except we prolong the rNEMD
+simulation to 1 ns, to get accurate statistic results. The results is shown in Fig. S13(b). The
+viscosity is estimated to be 0.85 mPa s at 300 K which is very close to the experiment value,
+0.83 mPa s.
+xviii
+
+FIG. S12: Radial distribution function of n-decane. (a) 400 K (b) 450 K and (c) 500 K
+xix
+
+FIG. S13: Viscosity of n-decane
+xx
+
+S5. APPLICATION 5: CRACK PROPAGATION IN GRAPHENE
+NANORIBBON
+In this example, we assess the capability of LightPFP to describe fracture propagation
+in graphene nanoribbon via molecular dynamics8.
+S5.1. Student ﬁne-tuning
+The training data were constructed to span two-dimensional carbon environments under
+mechanical loading, from pristine structures to defect-containing systems. The initial dataset
+included defect-free graphene sheets and graphene nanoribbons (GNRs) with armchair (AC)
+and zigzag (ZZ) edges, as well as structures with a triangular hole that served as crack
+initiators. To sample elastic responses broadly, we (a) performed NVT MD at 500 K, 1000
+K, and 1500 K; (b) applied small homogeneous deformations: ±5\% strain to both diagonal
+(uniaxial/biaxial) and oﬀ-diagonal (simple shear) components of the simulation cell. To
+further diversify local environments, atomic positions were rattled with Gaussian noise of
+0.1 Å standard deviation. No cracks were included in this initial dataset; thus, the base
+model learned from pristine bonding environments across temperatures, strain states, and
+edge types without explicit exposure to fracture.
+Starting from this model, we carried out active learning to improve robustness in high-
+strain regimes. Using the initial structures (graphene sheets and AC/ZZ GNRs), we ran
+strain-controlled MD with a “deform extension” protocol that incrementally altered the cell
+shape to increase strain every ﬁxed number of MD steps. This procedure drives the sys-
+tems into strongly non-linear regimes where bond stretching, bond angle distortions, and
+incipient bond breaking occur. During these runs, we monitored model performance and se-
+lectively augmented the training set with conﬁgurations exhibiting large errors or anomalous
+forces/energies under increasing deformation. In addition, we included strained conﬁgura-
+tions of ribbons with pre-introduced triangular holes to expose the model to local stress
+concentration ﬁelds characteristic of crack tips and to the chemistry of bond scission in sp2
+carbon. The resulting LightPFP model was then used for fracture simulations.
+xxi
+
+S5.2. Evaluation using PFP
+For evaluation, we simulate crack initiation and growth in AC and ZZ GNRs at 300 K
+by introducing a triangular hole on one ribbon edge to serve as a notch. Uniaxial tension
+was applied along the ribbon axis (x direction), with the Green-Lagrange strain increased
+at a rate of 10−5per femtosecond. Each trajectory was propagated for 50 ps, reaching a
+total strain of 0.5. Identical protocols were run with both the original PFP potential and
+LightPFP for direct comparison. The MD snapshot during the crack propagation process is
+shown in Fig. S14.
+Both PFP and Light predict crack initiation at about 6 ps (strain is 0.06) in AC GNR. For
+ZZ GNR, the PFP shows crack initiation at about 6 ps while LightPFP is a little bit slower.
+LightPFP reproduces the spatial pattern of bond breaking and the subsequent crack path
+observed with PFP: bonds fail ﬁrst near the notch where stress concentrates, and the crack
+advances into the ribbon width under continued loading. The straight crack in reproduced
+by LightPFP in both AC and ZZ GNR. The predicted morphology and sequence of fracture
+events are consistent across edge types, with no spurious branching or unphysical healing
+observed in LightPFP.
+The stress–strain responses computed from the virial stress is plotted in Fig. S15. The
+curve shows closely agreement between PFP and LightPFP over the entire loading history,
+including the elastic state where stress and strain change linearly, the crack propagation
+state where stress drops rapidly, and the state where stress is 0 after fracture.
+Taken together, these results demonstrate that LightPFP, trained without explicit cracks
+and reﬁned via strain-driven active learning, accurately captures the initiation and prop-
+agation of fractures in graphene nanoribbons. The agreement in crack onset time, crack
+morphology, and stress–strain behavior indicates that LightPFP attains PFP-level ﬁdelity
+for fracture simulations while retaining its computational eﬃciency.
+xxii
+
+FIG. S14: Illustration of crack propagation in graphene nanoribbons. Each column
+displays molecular dynamics snapshots at 5, 6, 7, 8, 9, 10, and 11 ps, corresponding to
+strains of 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, and 0.11, respectively. From top to bottom, the
+four rows show PFP MD of AC GNR, LightPFP MD of AC GNR, PFP MD of ZZ GNR,
+and LightPFP MD of ZZ GNR.
+xxiii
+
+FIG. S15: Strain stress curve of AC and ZZ GNR in crack propagation process
+xxiv
+
+S6. APPLICATION 6: FRICTION OF FE 2O3SURFACE WITH
+LUBRICANT AND FATTY ACID SURFACTANT
+In this example, we use LightPFP to investigate lubrication and shear responses at iron
+oxide–organic interfaces by simulating friction between two Fe 2O3slabs separated by a mul-
+tilayer ﬁlm of fatty-acid surfactants and a squalane lubricant9. Speciﬁcally, the simulation
+box comprises a ﬁve-layer stack: an Fe 2O3slab, a monolayer of stearic acid or oleic acid, a
+squalane layer, a second monolayer of stearic or oleic acid, and a second Fe 2O3slab. Figure
+S16shows the atomistic structure of this system. This conﬁguration results in a complex
+multilayer structure, making the collection of training data more challenging.
+S6.1. Student ﬁne-tuning
+We trained LightPFP on a curated dataset comprising (1) bulk Fe 2O3crystals, (2) Fe 2O3
+slabs, (3) bulk liquids of stearic acid, oleic acid, and squalane, (4) solid-liquid interfaces
+between Fe 2O3and each of stearic acid, oleic acid, and squalane, and (5) liquid-liquid inter-
+faces between squalane and stearic acid, and between squalane and oleic acid. We generated
+diverse initial structures within each category and used them to sample training conﬁgura-
+tions. Multiple distinct initial conﬁgurations were employed to enhance the diversity of the
+training set.
+To construct the initial dataset, we combined molecular-dynamics sampling with rattle
+perturbations. We performed MD in both NVT and NPT ensembles. NVT sampling at
+elevated temperatures (500, 1000, and 1500 K) broadened the range of conformations and
+interfacial arrangements, whereas NPT sampling at 300, 400, and 500 K targeted thermody-
+namic states relevant to friction simulations and yielded realistic organic-layer densities. To
+improve robustness to rare distortions, we applied Gaussian-distributed displacements (stan-
+dard deviations 0.10 and 0.15 Å) to the initial structures, generating physically plausible
+yet diverse local environments.
+Because friction can induce large molecular deformations and uncommon contact geome-
+tries that are rare under equilibrium sampling, we augmented the model via active learning
+focused on shear. In each iteration, we (i) ﬁxed the bottom part of the system, (ii) imposed
+a controlled lateral displacement on the top part to generate steady sliding, and (iii) evolved
+xxv
+
+FIG. S16: An atomistic structure of Fe 2O3- lubricant - surfactant system
+the remaining atoms with NVT dynamics. Conﬁgurations exhibiting large energy/force dis-
+crepancies were added to the training set, and the model was retrained. We conducted
+10 active-learning rounds: iterations 1–5 used smaller interface cells containing both iron
+oxide–molecule solid–liquid interfaces and surfactant–lubricant liquid–liquid interfaces to
+rapidly accumulate diverse contact motifs, whereas iterations 6–10 employed larger cells to
+capture cooperative rearrangements under shear.
+S6.2. Evaluation using PFP
+The ﬁnal LightPFP model was used to simulate the full ﬁve-layer stack: Fe 2O3slab –
+stearic acid – squalane ﬁlm – stearic acid – Fe 2O3slab. We validated the model by performing
+friction MD with both PFP and LightPFP. The initial system contained 4,604 atoms. Sliding
+simulations were run for 300 ps with a top-slab velocity of 30 m/s, while the bottom slab
+was ﬁxed. The system temperature was maintained at 300 K using a thermostat. The same
+sliding protocol was applied with PFP, and the resulting trajectories and ﬁnal structures
+were compared.
+Figure S17shows the displacement of molecules over 300 ps of sliding. As the upper
+Fe2O3slab moves, nearby molecules are entrained and translate in the sliding direction.
+Both PFP and LightPFP predict that molecules adjacent to the moving Fe 2O3layer travel
+by approximately 80 Å due to interfacial friction, with displacements that decay with depth
+into the surfactant and lubricant layers. Figure S18depicts the morphology of the moving
+Fe2O3slab and adjacent molecules in the ﬁnal frame. Interfacial shear substantially stretches
+xxvi
+
+FIG. S17: Molecular displacements during 300 ps of sliding for the Fe2O3 / fatty acid /
+squalane / fatty acid / Fe2O3 stack.
+FIG. S18: Final-frame morphology after 300 ps of sliding.
+the molecular chains and aligns them along the sliding direction. These results support the
+ability of LightPFP to capture coupled solid–organic interfacial mechanics and shear-induced
+ordering relevant to boundary lubrication.
+xxvii
+
+S7. APPLICATION 7: DIFFUSION BEHAVIOR IN POLYMER IONIC
+LIQUID
+In this example, we use LightPFP to investigate anion diﬀusion in a neat polymer ionic
+liquid (PIL), taking poly (ethyl vinyl imidazolium) paired with PF 6–as a representative
+system10. Poly (ethyl vinyl imidazolium) forms a positively charged polymer network, while
+discrete PF 6–anions occupy the interstitial regions of the polymer matrix, collectively giving
+rise to the characteristic ion-conducting behavior of PILs.
+S7.1. Student ﬁne-tuning
+We curated a training set to expose LightPFP to the relevant local environments of the
+target PIL across a broad range of densities, temperatures, and chain conformations. To ef-
+ﬁciently cover conformational diversity, we generated multiple initial structures rather than
+relying on a single long trajectory: starting from distinct packings accelerates exploration
+of chain orientations, local packing motifs, and ion coordination states. Structural assembly
+was performed with a dedicated routine that constructs mixed-oligomer boxes comprising
+monomers, dimers, trimers, 5-mers, and 7-mers of poly (ethyl vinyl imidazolium), together
+with the stoichiometric number of PF 6–anions to satisfy charge neutrality. Molecules were
+placed with randomized positions and orientations to maximize initial conﬁgurational diver-
+sity.
+Initial data generation combined short molecular dynamics (MD) sampling and stochas-
+tic perturbations. MD trajectories were run in both NVT and NPT ensembles. For NVT,
+we used elevated temperatures (500 K, 1000 K, 1500 K) to accelerate conﬁgurational de-
+correlation and broaden the coverage of local structures. For NPT, we sampled temperatures
+(400 K, 500 K, 600 K) representative of the intended application window to capture real-
+istic densities and coordination statistics. In addition, a rattle procedure applied Gaussian
+displacements (standard deviations of 0.10 and 0.15 Å) to further diversify local atomic
+environments and improve robustness. The initial LightPFP model is trained from this
+dataset.
+Starting from this model, we carried out active learning to enhance accuracy and stability
+under production conditions. Each active-learning iteration consisted of multiple short MD
+xxviii
+
+TABLE S2: Density of polymer ionic liquid
+Temperature (K) PFP (g/cm3) LightPFP (g/cm3)
+300 K 1.394 1.389
+400 K 1.374 1.372
+500 K 1.351 1.356
+jobs, each seeded from a newly generated structure via the above mentioned procedure. For
+each job, we randomly selected a temperature between 300 and 700 K, ran a 5 ps NVT
+trajectory followed by a 50 ps NPT trajectory, and attempted data collection every 100 MD
+steps. Conﬁgurations identiﬁed as poorly described by the current model were labeled and
+added to the training set, after which the model was retrained.
+S7.2. Evaluation using PFP
+To validate LightPFP for the target PIL, we performed MD comparisons against PFP.
+First, we generated reference PFP trajectories at 400, 500, and 600 K with NPT ensemble.
+Using identical initial conﬁgurations, ensemble settings, and integrator parameters, we then
+repeated the simulations with LightPFP and saved all trajectories for post hoc analysis.
+We computed equilibrium densities from the last 10 ps NPT trajectories. The densities at
+300 K, 400 K, and 500 K listed in Table S2. LightPFP densities closely track PFP across this
+range. The radial distribution functions (RDFs), which were accumulated over the last 10 ps
+of each trajectory at 300 K, 400 K, and 500 K, are shown in Fig. S19. LightPFP reproduces
+the positions and heights of the PFP peak, indicating consistent local coordination and
+packing.
+To probe anion mobility, we monitored phosphorus atoms (proxies for PF 6–) and com-
+puted mean squared displacement (MSD), as shown in Fig. S20. MSD curves from LightPFP
+agree well with those from PFP, indicating consistent diﬀusive behavior in the polymer ma-
+trix. In addition, the diﬀusion coeﬃcients D(T) were extracted from the MSD and ﬁtted
+to an Arrhenius form to estimate the activation energy for PF 6–transport. The activation
+energy from LightPFP is 10.46 kJ/mol, in close agreement with the PFP value of 10.82
+kJ/mol. We note that the limited number of temperatures constrains the precision of these
+xxix
+
+FIG. S19: Radial distribution function of polymer ionic liquid
+xxx
+
+FIG. S20: Diﬀusion behavior of PF 6–anion (left) means squared displacement of PF 6–
+anion at 300 K, 400 K and 500 K (right) Arrhenius plot of PF 6–anion diﬀusion coeﬃcient
+estimates; the results are presented primarily to demonstrate consistency between the two
+models.
+xxxi
+
+S8. APPLICATION 8: MECHANICAL PROPERTY OF
+SIO2–P2O5–AL 2O3–NA 2O GLASS
+In this example, we use LightPFP to investigate composition–property relationships and
+the mechanical response of multicomponent oxide glasses in the SiO 2–P2O5–Al2O3–Na2O
+system, as a stringent test on amorphous materials11. We consider glasses with composi-
+tions SiO 2:(79.69-x) mol\%, P 2O5:x mol\%, Al 2O3:13.79 mol\%, and Na 2O:15.52 mol\%, with
+x ranging from 0 to 50 mol\%.
+S8.1. Student ﬁne-tuning
+To build the initial training set, we combined crystalline and disordered conﬁgurations.
+First, crystal structures of SiO 2, P2O5, Al2O3, and Na 2O were obtained from the Materials
+Project to capture characteristic, energetically stable local environments (e.g., tetrahedral
+Si). Second, random packings were generated by placing atoms uniformly at random in
+periodic simulation boxes subject to a minimum interatomic separation, avoiding atomic
+overlap while spanning a broad space of disordered motifs. From these crystalline and
+random initial structures, we performed NPT MD at 500 K, 1000 K, and 1500 K, and
+sampled uncorrelated snapshots across densities and coordination states to train the initial
+LightPFP model.
+Active learning was then used to reﬁne accuracy for glassy states. For each composition,
+we initiated melt–quench protocols from random packings: (i) NVT MD at 2000 K for
+10 ps to fully melt and randomize the network; (ii) linear cooling from 2000 K to 500 K
+at 0.1 K/fs to form the glass; and (iii) additional MD at 500 K to relax the structure.
+During these runs, we monitored model reliability and selectively augmented the training
+set with conﬁgurations exhibiting large force/energy discrepancies relative to the reference
+PFP, iterating retraining until convergence. This pipeline exposes the model to topological
+rearrangements (bond breaking/formation, modiﬁer-induced non-bridging oxygens) and the
+broad spectrum of local environments that emerge during melt–quench.
+xxxii
+
+FIG. S21: Density of (82-x)SiO 2-xP2O5-16Al 2O3-18Na 2O glass
+S8.2. Evaluation using PFP
+For evaluation, we generated glass structures at ﬁve representative compositions, i.e. (82-
+x)SiO 2–xP2O5–16Al 2O3–18Na 2O, where x = 0, 4, 8, 22, 46. Identical melt–quench protocols
+were performed with both the PFP and LightPFP. Speciﬁcally, each system was equilibrated
+in the melt and then quenched at 0.02 K/fs to the 500K, followed by NPT relaxation to
+determine the density. The resulting densities are plotted in Fig. S21. In both PFP and
+LightPFP simulations, the density increases with SiO 2content. The mean absolute error
+(MAE) of the LightPFP-predicted density across the ﬁve compositions is 0.014 g/cm3.
+In addition, we evaluated the glass structure using the radial distribution function (RDF).
+For brevity, Fig. S22shows the RDF for the composition 74SiO 2–16Al 2O3–18Na 2O–8P 2O5.
+As shown, LightPFP is in good agreement with PFP across the principal pair correlations.
+To assess mechanical response, we computed the elastic stiﬀness tensor for the repre-
+sentative glass 74SiO 2–16Al 2O3–18Na 2O–8P 2O5with both PFP and LightPFP. Results are
+listed in Table S3, including major components of elastic tensor and derived bulk, shear,
+and Young’s moduli, as well as Poisson’s ratio.
+These results indicate that LightPFP can robustly learn and transfer the structural and
+mechanical behavior of complex multicomponent oxide glasses from PFP, while accommo-
+dating substantial composition variation from silica-rich to phosphate-rich regimes.
+xxxiii
+
+FIG. S22: Radial distribution function of 74SiO 2-16Al 2O3-18Na 2O-8P 2O5
+xxxiv
+
+TABLE S3: Elastic properties of 74SiO 2-16Al 2O3-18Na 2O-8P 2O5
+LightPFP PFP err rel err
+C11 53.312 55.138 1.825 0.033
+C12 18.077 15.643 2.434 0.156
+C13 18.169 15.699 2.470 0.157
+C22 58.004 56.435 1.570 0.0278
+C23 19.364 16.745 2.619 0.156
+C33 58.283 58.618 0.335 0.00571
+C44 19.709 20.521 0.812 0.0396
+C55 19.283 20.065 0.782 0.0390
+C66 18.493 19.606 1.113 0.0568
+bulk modulus 31.163 29.580 1.583 0.0535
+shear modulus 19.081 20.168 1.087 0.0539
+Young’s modulus 47.540 49.299 1.759 0.0357
+Poisson ratio 0.246 0.222 0.0235 0.106
+xxxv
+
+S9. APPLICATION 9: HETEROGENEOUS GRAIN BOUNDARY
+BETWEEN FCC CU AND BCC MO
+In this example, we use LightPFP to investigate the energetics of grain boundaries be-
+tween FCC Cu and BCC Mo via large-scale atomistic simulations.
+S9.1. Student ﬁne-tuning
+We constructed initial Cu/Mo bicrystals using the cut-and-concatenate method, starting
+from ideal FCC Cu and BCC Mo crystals. The method is shown in Fig. S23. Simply
+speaking, the method takes two input crystal structures (i.e., Cu and Mo), cuts out cubic
+fragments at arbitrary positions and orientations, and then stitches them together to form
+grain-boundary–like structures. Unlike predeﬁned low-energy grain boundaries structures,
+the generated structures are highly diverse. They often exhibit large lattice mismatch, and
+because the original periodic order is disrupted, numerous defects are introduced. This is not
+a drawback; rather, it is advantageous for training MLIPs, as it provides more oﬀ-equilibrium
+data samples and thereby improves the stability and robustness of the MLIP.
+The initial database was assembled via short MD sampling on these crystal and grain
+boundary structures. Speciﬁcally, we performed NVT trajectories at 500 K, 1000 K, and
+1500 K to introduce thermal disorder and local reconstructions, and NPT trajectories at
+300 K, 400 K, 500 K, and 600 K to allow relaxation and sampling of strain-accommodated
+interfacial structures. The initial LightPFP model is trained on this dataset.
+Starting from this initial model, we performed active learning to improve accuracy and
+robustness. For one initial Cu/Mo bicrystal structure generated by cut-and-conatenate
+method, we ran MD from 300 K to 1000 K using a two-step cycle: (1) 2 ps in the NVT
+ensemble to enable short-time reconstructions, followed by (2) 5 ps in the NPT ensemble to
+capture stress relaxation and incipient structural transformations. After that, conﬁgurations
+were relaxed by geometry optimization. Frames identiﬁed as low accuracy were added to
+the training set and the model was retrained. Iterating this procedure produced a LightPFP
+model that faithfully describes bulk phases and interface structure.
+xxxvi
+
+FIG. S23: Illustration of cut-and-concatenate method
+FIG. S24: Comparison of grain boundary energy of 1000 Cu/Mo interface structures
+calculated by PFP and LightPFP
+S9.2. Evaluation using PFP
+For evaluation, we generated 1000 low-strain CSL Cu/Mo grain-boundary structures
+using pymatgen, covering a broad range of misorientations and in-plane shifts. For each
+structure, we performed structure optimization ﬁrst, and then computed the grain-boundary
+energy with both the reference PFP model and LightPFP. The grain-boundary energy was
+obtained by subtracting appropriate bulk reference energies for FCC Cu and BCC Mo from
+the total energy of the bicrystal and normalizing by the interfacial area (accounting for the
+two interfaces in periodic slabs). The resulting parity plot is shown in Fig. S24. Across the
+1000-member test set, LightPFP achieves good agreement with PFP for the vast majority
+of boundaries.
+xxxvii
+
+Overall, these results demonstrate that LightPFP can accurately predict Cu/Mo grain-
+boundary energies over a broad structural space while matching the reference PFP model
+for most conﬁgurations, validating its use for high-throughput screening and large-scale
+interfacial simulations.
+xxxviii
+
+S10. APPLICATION 10: MICELLE SIMULATION
+In this example, we investigated micelle formation using LightPFP. As is well known, this
+process entails dynamic changes in surfactant structures. The hydrophilic and hydrophobic
+groups of each surfactant molecule interact; the hydrophilic groups orient outward toward
+the water solvent, while the hydrophobic groups orient inward, shielding themselves from
+the water. This mechanism is generally simulated using classical force ﬁelds (FFs) because
+it typically involves large system sizes. However, the parameterization of classical FFs is
+very demanding, and capturing chemical interactions, such as bond formation and disso-
+ciation, is diﬃcult. Furthermore, their accuracy is, of course, lower than that of Density
+Functional Theory (DFT) calculations. To enable semi-DFT accuracy for large-scale sim-
+ulations, which are intractable for DFT or even PFP, we employed LightPFP to perform
+dynamical simulations, potentially involving chemical reactions, in larger systems.
+To test the capability of LightPFP, we selected a gemini surfactant as a test material.
+This surfactant type features dual hydrophobic tails and dual cationic heads. The cationic
+heads interact with bromide counter-ions (Br−). It is known that 12-s-12 systems (where ’s’
+is the spacer length) tend to form micelles rapidly due to their dual structure (see illustrative
+structure in Fig. S25).
+S10.1. Student ﬁne-tuning
+We prepared the starting structures from the SMILES expression of 12-6-12 system. We
+varied the value of s (the spacer length separating the two tails) and generated various
+structures with diﬀerent numbers of surfactant molecules immersed in water solvent using
+the LiquidGenerator12function. Using a structure sampling protocol that combined NVT
+and NPT MD simulations with rattle sampling, we generated the initial dataset. The PFP
+v8.0.0 calculator with the R2SCAN mode was used as the reference.
+Next, we performed active learning. We employed the speciﬁc-type organic pre-trained
+model as the pre-trained model, expecting faster calculations than larger models. The ac-
+tive learning consisted of three stages: in the early stage (iterations 0–4), we tested smaller
+systems; in the middle stage (iterations 5–8), medium-sized systems; and in the ﬁnal stage
+(iterations 9–12), we used the largest systems as input structures. For each active learn-
+xxxix
+
+ing iteration, we deﬁned internal loops, varying the number of surfactant molecules, water
+molecules, and the temperature range (300 K to 500 K) to ensure structural diversity. The
+MD simulation protocols included NVT (Langevin thermostat) and NPT (Nosé–Hoover
+thermostat/barostat) ensembles. After the active learning, we trained the model using the
+entire dataset collected for a longer duration to obtain the ﬁnal LightPFP model for pro-
+duction calculations. The entire process took about half a day. We repeated this process
+for each surfactant with diﬀerent spacer lengths s(s= 2,6,10).
+S10.2. Large-scale MD simulation
+In the production runs, we performed 2 ns NPT simulations at 350 K for s = 2, 6, 10.
+Fig.S26shows the number of clusters in the system. In the initial snapshot, this number
+equals the total number of surfactant molecules. As they aggregate to form micelles, the
+number of clusters decreases. As shown in the ﬁgure, the cluster count gradually decreases
+over time, and ﬁnally, a large cluster is formed in each case. This clearly represents the initial
+phase of micelle formation, and LightPFP successfully captures the surfactant aggregation
+process. Fig. S27shows the initial and ﬁnal structures for each system. Consistent with
+the cluster analysis, large clusters were formed. Interestingly, the hydrophilic portions are
+oriented outward while the hydrophobic tails are oriented inward, as expected from the
+electrostatic nature of surfactants.
+Although we acknowledge that 2 ns is not suﬃcient for the complete formation of micelles,
+it is valuable to observe the formation process at a semi-DFT level of accuracy. To our
+knowledge, this is the ﬁrst time micelle formation has been simulated using a machine
+learning potential (MLIP). Finally, we note that the dataset generated using R2SCAN mode
+was crucial for this type of simulation. We also tested the PFP’s PBE+D3 mode, but in
+that case, the simulation became unstable, eventually leading to system breakdown. We
+attribute this behavior to the inaccurate description of water by the PBE-level functional.
+It is known that properties like the radial distribution function (RDF), viscosity, and density
+of water are better described by the R2SCAN mode; thus, the superior description of water
+likely contributes to the stable MD simulation results.
+xl
+
+FIG. S25: Structure of 12- s-12 gemini surfactant with dual hydrophobic tails, dual cationic
+heads, and bromide counter-ions.
+FIG. S26: Evolution of the number of clusters over time during 2 ns NPT simulations at
+350 K for surfactants with spacer lengths s= 2, 6, and 10.
+xli
+
+FIG. S27: Snapshots from MD simulations showing initial and ﬁnal structures for systems
+with spacer lengths s= 2, 6, and 10, demonstrating micelle formation.
+xlii
+
+S11. APPLICATION 11: CHEMICAL MECHANICAL POLISHING OF SI
+SURFACE
+To illustrate the practical application of LightPFP, we present an example reproducing
+abrasive rolling during the chemical mechanical polishing (CMP) of crystalline silicon by
+a silica particle13. The simulation box consists of a Si(100) slab and a spherical SiO 2par-
+ticle placed above the slab. The simulation protocol follows the two-stage loading scheme
+commonly employed in molecular dynamics (MD) studies of CMP: ﬁrst, an external normal
+(“down”) load is applied to the silica particle to bring it into contact with the silicon surface;
+then, a tangential (“driving”) load is applied to the same particle to induce rolling and sliding
+motion across the slab.
+S11.1. Student ﬁne-tuning
+The system construction and initial training dataset are intentionally minimal. Crys-
+talline Si and SiO 2structures are generated, from which spherical SiO 2clusters are cut.
+Si and SiO 2slabs are then prepared with vacuum layers, and a representative solid/solid
+interface is assembled through the simple cut-and-concatenate procedure introduced in Sec-
+tionS9. To populate the initial dataset, we sample crystalline structures using MD, rattle,
+compression, deformation, and vacancy methods, while non-crystalline and interfacial struc-
+tures are sampled using MD and rattle only. This combination of bulk, surface, cluster,
+and interface conﬁgurations provides chemically diverse yet computationally inexpensive
+coverage for the ﬁrst LightPFP ﬁtting.
+The active-learning protocol is used to generate a more robust LightPFP model. Active
+learning run the same MD protocol as described above. The structure with large discrepancy
+with PFP will be detected and collected for further training. The active cycle is organized
+as a simple curriculum across particle sizes (small →medium →large), so that the model
+learns contact physics at increasing mechanical intensity. After the active acquisition phase
+the accumulated dataset is used for a single, consolidated retraining step to produce the
+ﬁnal LightPFP model.
+xliii
+
+S11.2. Evaluation using PFP
+For validation, we compare LightPFP with a PFP reference model using a small simula-
+tion cell containing 6133 atoms, following the same two-stage loading protocol. Four loading
+conditions were tested with down/driving forces of (5/10 eV/Å), (10/10 eV/Å), (5/20 eV/Å),
+and (10/20 eV/Å), each simulated for 200 ps. The number of removed atoms was deter-
+mined by counting those displaced more than 2 Å during the MD trajectory, as shown in
+Figure S28. Both LightPFP and PFP exhibit consistent trends, with the number of removed
+atoms increasing in the order: (10/10) < (5/10) < (5/20) < (10/20). However, LightPFP
+consistently predicts a higher number of removed atoms than PFP under all loading con-
+ditions. This diﬀerence likely arises from subtle variations in surface interaction strength.
+Despite this quantitative deviation, the qualitative agreement in trend demonstrates that
+LightPFP accurately reproduces the underlying contact and material removal physics while
+oﬀering improved sensitivity to interfacial dynamics.
+S11.3. Large-scale MD simulation
+Finally, we demonstrate scalability by simulating the polishing of Si by a 5 nm-diameter
+silica particle in a dry environment. This production system comprises 59,266 atoms and is
+evolved for 0.6 ns under a 50 eV/Å normal load and a 100 eV/Å driving load. The snapshots
+of the MD trajectory is presented in Figure S29, showing the motion of the SiO 2particle
+and the corresponding polishing process.
+xliv
+
+FIG. S28: Number of removed Si atoms from Si slab during MD simulation of chemical
+mechanical polishing. The down/driving force applied on particle is annotated.
+FIG. S29: Time evolution of the molecular dynamics simulation illustrating the chemical
+mechanical polishing (CMP) of crystalline Si by a 5 nm SiO 2particle. Panels (a)–(d)
+correspond to 0, 100, 200, and 300 ps, respectively, showing progressive rolling motion, and
+surface atom removal on the Si slab.
+xlv
+
+REFERENCES
+1C. Morin, D. Simon, and P. Sautet, The Journal of Physical Chemistry B 108, 5653 (2004).
+2National Institute of Standards and Technology (NIST) and International Union of Pure
+and Applied Chemistry (IUPAC), “Iupac-nist solubility database,” Accessed: 2025-10-13.
+3A. Stukowski, Jom 66, 399 (2014).
+4National Center for Biotechnology Information, “Pubchem compound summary for hep-
+tane,” PubChem, section: Solubility. Accessed 2025-10-13.
+5I. Carrillo-Berdugo, J. Navas, and R. Grau-Crespo, The Journal of Chemical Physics 160
+(2024).
+6B. Hess, The Journal of chemical physics 116, 209 (2002).
+7“Nist chemistry webbook,” (2025), entry: n-Decane (CAS RN 124-18-5).
+8G. S. Jung, H. Myung, and S. Irle, Machine Learning: Science and Technology 4, 035001
+(2023).
+9M. Doig, C. P. Warrens, and P. J. Camp, Langmuir 30, 186 (2014).
+10X. Luo, H. Liu, and S. J. Paddison, ACS Applied Polymer Materials 3, 141 (2020).
+11Y. Qian, B. Song, J. Jin, G. I. Prayogo, K. Utimula, K. Nakano, R. Maezono, K. Hongo,
+and G. Zhao, Journal of the American Ceramic Society 105, 6604 (2022).
+12Matlantis Contrib package, available at https://github.com/matlantis/
+matlantis-contrib .
+13L. Si, D. Guo, J. Luo, X. Lu, and G. Xie, Journal of Applied Physics 109(2011).
+xlvi
+
+\end{document}
