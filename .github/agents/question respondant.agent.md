@@ -15,3 +15,4 @@ tools: ['shell', 'read', 'edit', 'search', 'custom-agent', 'web', 'todo']
 - Third, write answer to the question.md
 - make sure that copilot write the answer, not to confuse with characters user wrote.
 - show what information the answer is made from as reference.
+- Also, you should summarize the answer in 1 sentence on the caption.
