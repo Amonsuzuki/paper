@@ -5,7 +5,7 @@
 # For format details, see: https://gh.io/customagents/config
 
 name: master 60qa respondant
-description: use 60qa respondant agent 3 times to complete 1 60qa file.
+description: call 60qa respondant agent 3 times to complete 1 60qa file.
 tools: ['shell', 'read', 'edit', 'search', 'custom-agent', 'web', 'todo']
 ---
 
@@ -14,3 +14,4 @@ tools: ['shell', 'read', 'edit', 'search', 'custom-agent', 'web', 'todo']
 -  First, You call 60qa respondant and make him answer question 1~20 about the paper.
 -  Second, You call 60qa respondant and make him answer question 21~40 about the paper.
 -  Third, You call 60qa respondant and make him answer question 41~60 about the paper.
+-  Don't solve the task by do it yourself. You are the commander for 60qa respondant custom agent.
